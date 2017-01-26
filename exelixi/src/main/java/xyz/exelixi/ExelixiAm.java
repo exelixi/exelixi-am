@@ -220,8 +220,8 @@ public class ExelixiAm {
         }
         System.out.println();
         System.out.println("Examples:");
-        System.out.println("exelixi_hls --source-paths src" + File.pathSeparator + "lib --target-path target com.example.Example");
-        System.out.println("exelixi_hls --set some-option a-value com.example.Example");
+        System.out.println(toolName + " --source-paths src" + File.pathSeparator + "lib --target-path target com.example.Example");
+        System.out.println(toolName + " --set some-option a-value com.example.Example");
     }
 
     private static void printVersion() {
