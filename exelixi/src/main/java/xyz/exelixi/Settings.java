@@ -1,6 +1,7 @@
 package xyz.exelixi;
 
 import se.lth.cs.tycho.settings.*;
+import xyz.exelixi.backend.BackendsFactory;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -9,9 +10,28 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Created by scb on 1/24/17.
+ * @author Simone Casale-Brunet
  */
 public class Settings {
+
+    public static final Setting<String> backend = new StringSetting() {
+        @Override
+        public String getKey() {
+            return "backend";
+        }
+
+        @Override
+        public String getDescription() {
+            StringBuffer stringBuffer = new StringBuffer();
+            BackendsFactory.INSTANCE.getBackends().forEach(b -> stringBuffer.append("\"").append(b.getId()).append("\" "));
+            return "The backend name that will be used to be used. Available options are: " + stringBuffer.toString();
+        }
+
+        @Override
+        public String defaultValue(Configuration configuration) { return ""; }
+
+
+    };
 
     public static final Setting<List<Path>> orccSourcePaths = new PathListSetting() {
         @Override
@@ -101,7 +121,7 @@ public class Settings {
     public static final Setting<Boolean> fpgaDevice = new OnOffSetting() {
         @Override
         public String getKey() {
-            return "FPGA Device";
+            return "fpga-device";
         }
 
         @Override
