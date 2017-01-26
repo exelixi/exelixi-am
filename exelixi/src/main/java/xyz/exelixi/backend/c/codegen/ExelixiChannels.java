@@ -1,17 +1,18 @@
-package xyz.exelixi.phases.caltbackend;
+package xyz.exelixi.backend.c.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
 import se.lth.cs.tycho.ir.network.Network;
 import se.lth.cs.tycho.types.IntType;
 import se.lth.cs.tycho.types.Type;
+import xyz.exelixi.backend.c.CBackendCore;
 
 import java.util.OptionalInt;
 
 @Module
 public interface ExelixiChannels {
     @Binding
-    ExelixiBackend backend();
+    CBackendCore backend();
 
     default Preprocessor preprocessor() {
         return backend().preprocessor();

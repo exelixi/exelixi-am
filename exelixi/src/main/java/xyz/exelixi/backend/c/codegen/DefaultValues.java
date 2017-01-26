@@ -1,4 +1,4 @@
-package xyz.exelixi.phases.caltbackend;
+package xyz.exelixi.backend.c.codegen;
 
 import org.multij.Module;
 import se.lth.cs.tycho.types.*;

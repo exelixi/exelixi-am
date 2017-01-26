@@ -1,35 +1,78 @@
-package xyz.exelixi.tests;
-
+package xyz.exelixi;
 
 import se.lth.cs.tycho.ir.QID;
+import se.lth.cs.tycho.phases.Phase;
 import se.lth.cs.tycho.settings.Configuration;
 import se.lth.cs.tycho.settings.Setting;
 import se.lth.cs.tycho.settings.SettingsManager;
-import xyz.exelixi.compiler.C.ExelixiCompiler;
-import xyz.exelixi.compiler.C.ExelixiLoader;
+import xyz.exelixi.backend.BackendsFactory;
+import xyz.exelixi.backend.ExelixiBackend;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
+import static xyz.exelixi.Settings.*;
+import static xyz.exelixi.frontend.FrontendLoader.*;
+import static se.lth.cs.tycho.reporting.Reporter.*;
 
-public class TestTychoC {
+/**
+ * @author Simone Casale-Brunet
+ */
+public class ExelixiAm {
 
-    private static final String toolName = "exelixi-C";
-    private static final String toolFullName = "The Exelixi Compiler";
+    private static final String toolName = "exelixi_am";
+    private static final String toolFullName = "Exelixi Actors-Machine Dataflow Compiler";
     private static final String toolVersion = "0.0.1-SNAPSHOT";
 
+    private BackendsFactory backendsFactory;
+    private SettingsManager settingsManager;
+    private List<String> promotedSettings;
+
     public static void main(String[] args) {
-        TestTychoC main = new TestTychoC();
-        main.run(args);
+        ExelixiAm launcher = new ExelixiAm();
+        launcher.run(args);
     }
 
-    private void run(String... args) {
-        SettingsManager settingsManager = ExelixiCompiler.defaultSettingsManager();
+    public ExelixiAm() {
+        backendsFactory = BackendsFactory.INSTANCE;
+
+        // build a set of unique settings
+        Collection<Setting> settings = new HashSet<>();
+
+        // these are the default options required by every backend
+        settings.add(sourcePaths);
+        settings.add(orccSourcePaths);
+        settings.add(xdfSourcePaths);
+        settings.add(targetPath);
+        settings.add(reportingLevel);
+        settings.add(phaseTimer);
+        settings.add(selectedBackend);
+        settings.add(followLinks);
+
+        // collect all the settings required by the available phases
+        settings.addAll(backendsFactory.getRegisteredPhases().stream().flatMap(phase -> phase.getPhaseSettings().stream())
+                .collect(Collectors.toList()));
+
+        // create the list to be passed to the builder
+        List<Setting<?>> list = new ArrayList<>();
+        promotedSettings = new ArrayList<>();
+        settings.forEach(s -> {list.add(s); promotedSettings.add(s.getKey());});
+
+        // finally create the settings manager
+        settingsManager = SettingsManager.builder().addAll(list).build();
+
+    }
+
+    public void run(String[] args) {
         Configuration.Builder builder = Configuration.builder(settingsManager);
-        List<String> promotedSettings = promotedSettings();
+        //List<String> promotedSettings = promotedSettings();
+
         QID qid = null;
+        String backendId = null;
         int i = 0;
         try {
             while (i < args.length) {
@@ -42,8 +85,9 @@ public class TestTychoC {
                         printVersion();
                         System.exit(0);
                     }
+                    //FIXME add compiler
                     case "--print-phases": { // hidden option
-                        printPhases();
+                        printPhases(backendsFactory.getRegisteredPhases());
                         System.exit(0);
                     }
                     case "--settings": {
@@ -51,7 +95,7 @@ public class TestTychoC {
                         System.exit(0);
                     }
                     case "--set": {
-                        if (i+3 >= args.length) {
+                        if (i + 3 >= args.length) {
                             printMissingArguments("--set");
                             System.exit(1);
                         }
@@ -61,18 +105,24 @@ public class TestTychoC {
                     }
                     default: {
                         if (args[i].startsWith("--")) {
-                            if (promotedSettings.contains(args[i].substring(2))) {
-                                if (i+2 >= args.length) {
+                            String argument = args[i].substring(2);
+                            if (promotedSettings.contains(argument)) {
+                                if (i + 2 >= args.length) {
                                     printMissingArguments(args[i]);
                                     System.exit(1);
                                 }
-                                builder.set(args[i].substring(2), args[i + 1]);
+                                builder.set(argument, args[i + 1]);
+
+                                if(selectedBackend.getKey().equals(argument)){
+                                    backendId = args[i + 1];
+                                }
+
                                 i += 2;
                             } else {
                                 printUnknownArgument(args[i]);
                                 System.exit(1);
                             }
-                        } else if (i == args.length-1) {
+                        } else if (i == args.length - 1) {
                             qid = QID.parse(args[i]);
                             i += 1;
                         } else {
@@ -95,23 +145,43 @@ public class TestTychoC {
             System.exit(1);
         }
 
-
-        Configuration config = builder.build();
-        ExelixiCompiler compiler = new ExelixiCompiler(config);
-        if (!compiler.compile(qid)) {
+        if(backendId == null){
+            printMissingBackend();
+            System.exit(1);
+        }else if(!backendsFactory.hasBackend(backendId)){
+            printUnavailableBackend(backendId);
             System.exit(1);
         }
+
+        // ok, now build the configuration
+        Configuration configuration = builder.build();
+
+        // select the backend
+        ExelixiBackend backend = backendsFactory.getBackend(backendId);
+        backend.setConfiguration(configuration);
+
+        if (!backend.compile(qid)) {
+            System.exit(1);
+        }
+
+
+
+
     }
 
-    private void printPhases() {
-        ExelixiCompiler.phases.forEach(phase -> {
-            System.out.println(phase.getName());
-            System.out.println(phase.getDescription());
-            System.out.println();
-        });
+    private static void printUnavailableBackend(String name) {
+        System.out.println("The backend \""+name+"\" is not registered");
+        printUsage();
+        System.out.println("For a description of available options: " + toolName + " --help");
     }
 
-    private void printSettings(SettingsManager settingsManager) {
+    private static void printMissingBackend() {
+        System.out.println("No backend was specified.");
+        printUsage();
+        System.out.println("For a description of available options: " + toolName + " --help");
+    }
+
+    private static void printSettings(SettingsManager settingsManager) {
         System.out.println("These are the settings available through --set <key> <value>");
         System.out.println();
         for (Setting<?> setting : settingsManager.getAllSettings()) {
@@ -120,17 +190,17 @@ public class TestTychoC {
         }
     }
 
-    private void printMissingArguments(String option) {
+    private static void printMissingArguments(String option) {
         System.out.println("Missing argument to " + option);
         printUsage();
     }
 
-    private void printUnknownArgument(String arg) {
+    private static void printUnknownArgument(String arg) {
         System.out.println("Unknown argument \"" + arg + "\"");
         printUsage();
     }
 
-    private void printHelp(List<String> promotedSettings, SettingsManager settingsManager) {
+    private static void printHelp(List<String> promotedSettings, SettingsManager settingsManager) {
         printVersion();
         printUsage();
         System.out.println();
@@ -150,33 +220,33 @@ public class TestTychoC {
         }
         System.out.println();
         System.out.println("Examples:");
-        System.out.println("tychoc --source-paths src"+ File.pathSeparator+"lib --target-path target com.example.Example");
-        System.out.println("tychoc --set some-option a-value com.example.Example");
+        System.out.println("exelixi_hls --source-paths src" + File.pathSeparator + "lib --target-path target com.example.Example");
+        System.out.println("exelixi_hls --set some-option a-value com.example.Example");
     }
 
-    private List<String> promotedSettings() {
-        return Stream.of(
-                ExelixiCompiler.sourcePaths,
-                ExelixiCompiler.orccSourcePaths,
-                ExelixiCompiler.xdfSourcePaths,
-                ExelixiCompiler.targetPath,
-                ExelixiLoader.followLinks
-        ).map(Setting::getKey).collect(Collectors.toList());
-    }
-
-    private void printVersion() {
+    private static void printVersion() {
         System.out.println(toolFullName + ", version " + toolVersion);
     }
 
-    private void printUsage() {
+    private static void printUsage() {
         System.out.println("Usage: " + toolName + " [options] [entity]");
         System.out.println("For more information: " + toolName + " --help");
     }
 
-    private void printMissingEntity() {
+
+
+    private static void printMissingEntity() {
         System.out.println("No entity was specified.");
         printUsage();
         System.out.println("For a description of available options: " + toolName + " --help");
+    }
+
+    private static void printPhases(Collection<Phase> phases) {
+        phases.forEach(phase -> {
+            System.out.println(phase.getName());
+            System.out.println(phase.getDescription());
+            System.out.println();
+        });
     }
 
 }

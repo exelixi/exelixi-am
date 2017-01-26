@@ -1,4 +1,4 @@
-package xyz.exelixi.phases.caltbackend;
+package xyz.exelixi.backend.c;
 
 import org.multij.Binding;
 import org.multij.Module;
@@ -11,6 +11,7 @@ import se.lth.cs.tycho.phases.attributes.ActorMachineScopes;
 import se.lth.cs.tycho.phases.attributes.GlobalNames;
 import se.lth.cs.tycho.phases.attributes.Names;
 import se.lth.cs.tycho.phases.attributes.Types;
+import xyz.exelixi.backend.c.codegen.*;
 
 import java.io.Closeable;
 
@@ -23,7 +24,7 @@ import static org.multij.BindingKind.*;
  */
 
 @Module
-public interface ExelixiBackend extends Closeable {
+public interface CBackendCore extends Closeable {
 
     // Attributes
     @Binding(INJECTED)

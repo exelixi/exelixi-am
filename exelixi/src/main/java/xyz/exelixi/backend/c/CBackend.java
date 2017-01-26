@@ -1,17 +1,13 @@
-package xyz.exelixi.backend.cpp;
+package xyz.exelixi.backend.c;
 
 import com.google.auto.service.AutoService;
-import se.lth.cs.tycho.comp.CompilationTask;
-import se.lth.cs.tycho.comp.Context;
-import se.lth.cs.tycho.ir.QID;
-import se.lth.cs.tycho.reporting.CompilationException;
 import xyz.exelixi.backend.ExelixiBackend;
 
 /**
  * @author Simone Casale-Brunet
  */
 @AutoService(ExelixiBackend.class)
-public class CppBackend extends ExelixiBackend {
+public class CBackend extends ExelixiBackend {
 
     @Override
     protected void registerPhases() {
@@ -63,20 +59,17 @@ public class CppBackend extends ExelixiBackend {
         // Code generations
         addPhase(RemoveUnusedEntityDeclsPhase);
         addPhase(PrintNetworkPhase);
+        addPhase(new CBackendPhase());
     }
 
     @Override
-    public boolean compile(QID entity) {
-        return true;
-    }
-
     public String getId() {
-        return "cpp";
+        return "c";
     }
 
     @Override
     public String getDescription() {
-        return "Cpp Backend";
+        return "C Backend";
     }
 
 }

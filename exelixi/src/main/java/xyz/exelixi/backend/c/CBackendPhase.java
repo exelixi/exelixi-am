@@ -1,4 +1,4 @@
-package xyz.exelixi.phases;
+package xyz.exelixi.backend.c;
 
 import org.multij.MultiJ;
 import se.lth.cs.tycho.comp.CompilationTask;
@@ -7,9 +7,8 @@ import se.lth.cs.tycho.ir.decl.GlobalEntityDecl;
 import se.lth.cs.tycho.ir.network.Instance;
 import se.lth.cs.tycho.phases.Phase;
 import se.lth.cs.tycho.reporting.Diagnostic;
-import xyz.exelixi.compiler.C.ExelixiCompiler;
-import xyz.exelixi.phases.caltbackend.Emitter;
-import xyz.exelixi.phases.caltbackend.ExelixiBackend;
+import xyz.exelixi.Settings;
+import xyz.exelixi.backend.c.codegen.Emitter;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -23,7 +22,7 @@ import java.util.stream.Collectors;
  *
  * @author Endri Bezati
  */
-public class CAltBackendPhase implements Phase {
+public class CBackendPhase implements Phase {
 
     /**
      * Source path
@@ -51,7 +50,7 @@ public class CAltBackendPhase implements Phase {
         String targetName = task.getIdentifier().getLast().toString();
 
         // -- Create src and include directories
-        targetPath = context.getConfiguration().get(ExelixiCompiler.targetPath);
+        targetPath = context.getConfiguration().get(Settings.targetPath);
         srcPath = createDirectory(targetPath, "src");
         includePath = createDirectory(targetPath, "include");
         createDirectory(targetPath, "build");
@@ -180,8 +179,8 @@ public class CAltBackendPhase implements Phase {
      * @param target
      * @param action
      */
-    private void withBackend(CompilationTask task, Context context, Path target, Consumer<ExelixiBackend> action) {
-        try (ExelixiBackend backend = openBackend(task, context, null, target)) {
+    private void withBackend(CompilationTask task, Context context, Path target, Consumer<CBackendCore> action) {
+        try (CBackendCore backend = openBackend(task, context, null, target)) {
             action.accept(backend);
         } catch (IOException e) {
             context.getReporter().report(new Diagnostic(Diagnostic.Kind.ERROR, "Could not generate code to \"" + target + "\""));
@@ -198,8 +197,8 @@ public class CAltBackendPhase implements Phase {
      * @return
      * @throws IOException
      */
-    private ExelixiBackend openBackend(CompilationTask task, Context context, Instance instance, Path path) throws IOException {
-        return MultiJ.from(ExelixiBackend.class)
+    private CBackendCore openBackend(CompilationTask task, Context context, Instance instance, Path path) throws IOException {
+        return MultiJ.from(CBackendCore.class)
                 .bind("task").to(task)
                 .bind("context").to(context)
                 .bind("instance").to(instance)

@@ -1,4 +1,4 @@
-package xyz.exelixi.phases.caltbackend;
+package xyz.exelixi.backend.c.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
@@ -12,6 +12,7 @@ import se.lth.cs.tycho.phases.attributes.Names;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.types.CallableType;
 import se.lth.cs.tycho.types.Type;
+import xyz.exelixi.backend.c.CBackendCore;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,7 +22,7 @@ import java.util.stream.Collectors;
 public interface Structure {
 
     @Binding
-    ExelixiBackend backend();
+    CBackendCore backend();
 
     default Emitter emitter() {
         return backend().emitter();

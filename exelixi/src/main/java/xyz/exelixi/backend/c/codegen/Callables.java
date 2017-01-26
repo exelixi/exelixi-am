@@ -1,4 +1,4 @@
-package xyz.exelixi.phases.caltbackend;
+package xyz.exelixi.backend.c.codegen;
 
 import org.multij.Binding;
 import org.multij.BindingKind;
@@ -19,6 +19,7 @@ import se.lth.cs.tycho.ir.util.ImmutableList;
 import se.lth.cs.tycho.phases.cbackend.util.NameExpression;
 import se.lth.cs.tycho.phases.cbackend.util.NameExpression.Seq;
 import se.lth.cs.tycho.types.*;
+import xyz.exelixi.backend.c.CBackendCore;
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -31,7 +32,7 @@ import static se.lth.cs.tycho.phases.cbackend.util.NameExpression.seq;
 @Module
 public interface Callables {
     @Binding
-    ExelixiBackend backend();
+    CBackendCore backend();
 
     default Preprocessor preprocessor() {
         return backend().preprocessor();

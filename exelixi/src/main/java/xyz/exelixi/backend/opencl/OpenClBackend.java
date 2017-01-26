@@ -1,10 +1,6 @@
 package xyz.exelixi.backend.opencl;
 
 import com.google.auto.service.AutoService;
-import se.lth.cs.tycho.comp.CompilationTask;
-import se.lth.cs.tycho.comp.Context;
-import se.lth.cs.tycho.ir.QID;
-import se.lth.cs.tycho.reporting.CompilationException;
 import xyz.exelixi.backend.ExelixiBackend;
 
 /**
@@ -20,13 +16,9 @@ public class OpenClBackend extends ExelixiBackend {
 
     @Override
     public String getDescription() {
-        return "Cpp Backend Phase";
+        return "Cpp Backend";
     }
 
-    @Override
-    public CompilationTask execute(CompilationTask compilationTask, Context context) throws CompilationException {
-        return null;
-    }
 
     @Override
     protected void registerPhases() {
@@ -80,8 +72,4 @@ public class OpenClBackend extends ExelixiBackend {
         addPhase(PrintNetworkPhase);
     }
 
-    @Override
-    public boolean compile(QID entity) {
-        return true;
-    }
 }

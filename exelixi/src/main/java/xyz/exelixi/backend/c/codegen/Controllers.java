@@ -1,16 +1,17 @@
-package xyz.exelixi.phases.caltbackend;
+package xyz.exelixi.backend.c.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
 import se.lth.cs.tycho.ir.entity.am.ActorMachine;
 import se.lth.cs.tycho.ir.entity.am.ctrl.*;
+import xyz.exelixi.backend.c.CBackendCore;
 
 import java.util.*;
 
 @Module
 public interface Controllers {
     @Binding
-    ExelixiBackend backend();
+    CBackendCore backend();
 
     default Emitter emitter() {
         return backend().emitter();

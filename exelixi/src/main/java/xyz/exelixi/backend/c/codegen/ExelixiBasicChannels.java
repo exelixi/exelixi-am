@@ -1,13 +1,14 @@
-package xyz.exelixi.phases.caltbackend;
+package xyz.exelixi.backend.c.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
 import se.lth.cs.tycho.types.Type;
+import xyz.exelixi.backend.c.CBackendCore;
 
 @Module
 public interface ExelixiBasicChannels extends ExelixiChannels {
     @Binding
-    ExelixiBackend backend();
+    CBackendCore backend();
 
     default Emitter emitter() {
         return backend().emitter();

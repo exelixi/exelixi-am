@@ -1,9 +1,10 @@
-package xyz.exelixi.phases.caltbackend;
+package xyz.exelixi.backend.c.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
 import se.lth.cs.tycho.comp.CompilationTask;
 import se.lth.cs.tycho.ir.decl.GlobalEntityDecl;
+import xyz.exelixi.backend.c.CBackendCore;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -18,7 +19,7 @@ import static org.multij.BindingKind.MODULE;
 @Module
 public interface CMakeLists {
     @Binding(MODULE)
-    ExelixiBackend backend();
+    CBackendCore backend();
 
     default Emitter emitter() {
         return backend().emitter();

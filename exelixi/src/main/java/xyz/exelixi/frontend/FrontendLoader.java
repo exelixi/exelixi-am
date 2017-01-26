@@ -1,4 +1,4 @@
-package xyz.exelixi.backend;
+package xyz.exelixi.frontend;
 
 import se.lth.cs.tycho.comp.*;
 import se.lth.cs.tycho.reporting.Reporter;

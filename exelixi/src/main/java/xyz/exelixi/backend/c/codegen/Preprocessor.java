@@ -1,7 +1,8 @@
-package xyz.exelixi.phases.caltbackend;
+package xyz.exelixi.backend.c.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
+import xyz.exelixi.backend.c.CBackendCore;
 
 /**
  * C Preprocessor
@@ -12,7 +13,7 @@ import org.multij.Module;
 public interface Preprocessor {
 
     @Binding
-    ExelixiBackend backend();
+    CBackendCore backend();
 
     default Emitter emitter() {
         return backend().emitter();

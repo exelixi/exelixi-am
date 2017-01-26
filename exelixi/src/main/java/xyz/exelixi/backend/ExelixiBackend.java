@@ -1,17 +1,21 @@
 package xyz.exelixi.backend;
 
+import se.lth.cs.tycho.comp.CompilationTask;
 import se.lth.cs.tycho.comp.Context;
 import se.lth.cs.tycho.comp.Loader;
 import se.lth.cs.tycho.ir.QID;
 import se.lth.cs.tycho.phases.*;
+import se.lth.cs.tycho.reporting.CompilationException;
+import se.lth.cs.tycho.reporting.Diagnostic;
 import se.lth.cs.tycho.reporting.Reporter;
 import se.lth.cs.tycho.settings.Configuration;
-import se.lth.cs.tycho.settings.SettingsManager;
-import xyz.exelixi.compiler.HLS.ExelixiHLSLoader;
+import xyz.exelixi.frontend.FrontendLoader;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import static xyz.exelixi.Settings.phaseTimer;
 
 /**
  * @author Simone Casale-Brunet
@@ -102,8 +106,35 @@ public abstract class ExelixiBackend implements Phase {
         this.compilationContext = new Context(configuration, loader, reporter);
     }
 
-    public abstract  boolean compile(QID entity);
+    public boolean compile(QID entity) {
+        CompilationTask compilationTask = new CompilationTask(Collections.emptyList(), entity, null);
+        long[] phaseExecutionTime = new long[phases.size()];
+        int currentPhaseNumber = 0;
+        boolean success = true;
+        for (Phase phase : phases) {
+            long startTime = System.nanoTime();
+            compilationTask = phase.execute(compilationTask, compilationContext);
+            phaseExecutionTime[currentPhaseNumber] = System.nanoTime() - startTime;
+            currentPhaseNumber += 1;
+            if (compilationContext.getReporter().getMessageCount(Diagnostic.Kind.ERROR) > 0) {
+                success = false;
+                break;
+            }
+        }
+        if (compilationContext.getConfiguration().get(phaseTimer)) {
+            System.out.println("Execution time report:");
+            for (int j = 0; j < currentPhaseNumber; j++) {
+                System.out.println(phases.get(j).getName() + " (" + phaseExecutionTime[j] / 1_000_000 + " ms)");
+            }
+        }
+
+        return success;
+    }
 
 
     public abstract String getId();
+
+    public CompilationTask execute(CompilationTask compilationTask, Context context) throws CompilationException {
+        return null;
+    }
 }
