@@ -82,6 +82,7 @@ public class HlsBackend extends ExelixiBackend {
         // Code generations
         addPhase(RemoveUnusedEntityDeclsPhase);
         addPhase(PrintNetworkPhase);
+        addPhase(new HlsBackendPhase());
     }
 
     @Override

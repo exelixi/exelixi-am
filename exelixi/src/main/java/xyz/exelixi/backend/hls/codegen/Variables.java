@@ -1,4 +1,4 @@
-package xyz.exelixi.phases.vivadohls;
+package xyz.exelixi.backend.hls.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
@@ -11,6 +11,7 @@ import se.lth.cs.tycho.ir.decl.VarDecl;
 import se.lth.cs.tycho.ir.entity.am.ActorMachine;
 import se.lth.cs.tycho.ir.entity.am.Scope;
 import se.lth.cs.tycho.ir.expr.ExprGlobalVariable;
+import xyz.exelixi.backend.hls.HlsBackendCore;
 
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -20,7 +21,7 @@ import static org.multij.BindingKind.MODULE;
 @Module
 public interface Variables {
     @Binding(MODULE)
-    VivadoHLSBackend backend();
+    HlsBackendCore backend();
 
     default String generateTemp() {
         return "t_" + backend().uniqueNumbers().next();

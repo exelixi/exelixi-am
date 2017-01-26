@@ -1,4 +1,4 @@
-package xyz.exelixi.phases.vivadohls;
+package xyz.exelixi.backend.hls.codegen;
 
 import org.multij.Module;
 import se.lth.cs.tycho.types.*;

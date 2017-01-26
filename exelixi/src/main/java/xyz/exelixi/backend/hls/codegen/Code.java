@@ -1,4 +1,4 @@
-package xyz.exelixi.phases.vivadohls;
+package xyz.exelixi.backend.hls.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
@@ -22,6 +22,7 @@ import se.lth.cs.tycho.phases.attributes.Names;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.types.*;
+import xyz.exelixi.backend.hls.HlsBackendCore;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -34,7 +35,7 @@ import static org.multij.BindingKind.MODULE;
 @Module
 public interface Code {
     @Binding(MODULE)
-    VivadoHLSBackend backend();
+    HlsBackendCore backend();
 
     default Emitter emitter() {
         return backend().emitter();

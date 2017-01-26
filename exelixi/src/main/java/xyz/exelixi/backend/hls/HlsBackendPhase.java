@@ -1,4 +1,4 @@
-package xyz.exelixi.phases;
+package xyz.exelixi.backend.hls;
 
 import org.multij.MultiJ;
 import se.lth.cs.tycho.comp.CompilationTask;
@@ -15,7 +15,7 @@ import java.nio.file.Path;
 /**
  * Vivado HLS Backend Phase
  */
-public class VivadoHLSBackendPhase implements Phase {
+public class HlsBackendPhase implements Phase {
 
     /**
      * Code gen Path
@@ -65,10 +65,10 @@ public class VivadoHLSBackendPhase implements Phase {
         createDirectories(context);
 
         // -- Get Vivado HLS Backend
-        HlsBackendCore backend = openBackend(task, context);
+        HlsBackendCore core = openBackend(task, context);
 
         // -- Generator Actor Code
-        generateActors(backend);
+        generateActors(core);
 
         return task;
     }

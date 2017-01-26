@@ -1,8 +1,9 @@
-package xyz.exelixi.phases.vivadohls;
+package xyz.exelixi.backend.hls.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
+import xyz.exelixi.backend.hls.HlsBackendCore;
 
 /**
  * C Preprocessor
@@ -13,7 +14,7 @@ import se.lth.cs.tycho.phases.cbackend.Emitter;
 public interface Preprocessor {
 
     @Binding
-    VivadoHLSBackend backend();
+    HlsBackendCore backend();
 
     default Emitter emitter() {
         return backend().emitter();

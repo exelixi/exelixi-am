@@ -1,4 +1,4 @@
-package xyz.exelixi.phases.vivadohls;
+package xyz.exelixi.backend.hls.codegen;
 
 import org.multij.Binding;
 import org.multij.BindingKind;
@@ -18,6 +18,7 @@ import se.lth.cs.tycho.ir.util.ImmutableList;
 import se.lth.cs.tycho.phases.cbackend.util.NameExpression;
 import se.lth.cs.tycho.phases.cbackend.util.NameExpression.Seq;
 import se.lth.cs.tycho.types.*;
+import xyz.exelixi.backend.hls.HlsBackendCore;
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -30,7 +31,7 @@ import static se.lth.cs.tycho.phases.cbackend.util.NameExpression.seq;
 @Module
 public interface Callables {
     @Binding
-    VivadoHLSBackend backend();
+    HlsBackendCore backend();
     /*
 	Global scope:
 	- typedef fat pointers for all different ExprLambda and ExprProc types

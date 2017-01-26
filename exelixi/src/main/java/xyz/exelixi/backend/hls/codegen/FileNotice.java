@@ -30,11 +30,12 @@
  *
  */
 
-package xyz.exelixi.phases.vivadohls;
+package xyz.exelixi.backend.hls.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
+import xyz.exelixi.backend.hls.HlsBackendCore;
 
 /**
  * File Notice
@@ -44,7 +45,7 @@ import se.lth.cs.tycho.phases.cbackend.Emitter;
 @Module
 public interface FileNotice {
     @Binding
-    VivadoHLSBackend backend();
+    HlsBackendCore backend();
 
     default Emitter emitter() {
         return backend().emitter();

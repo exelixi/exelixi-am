@@ -30,7 +30,7 @@
  *
  */
 
-package xyz.exelixi.phases.vivadohls;
+package xyz.exelixi.backend.hls.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
@@ -38,6 +38,7 @@ import se.lth.cs.tycho.comp.SourceUnit;
 import se.lth.cs.tycho.ir.decl.GlobalEntityDecl;
 import se.lth.cs.tycho.ir.network.Instance;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
+import xyz.exelixi.backend.hls.HlsBackendCore;
 
 import java.nio.file.Path;
 
@@ -48,7 +49,7 @@ import java.nio.file.Path;
 @Module
 public interface Actor {
     @Binding
-    VivadoHLSBackend backend();
+    HlsBackendCore backend();
 
     default Preprocessor preprocessor() {
         return backend().preprocessor();

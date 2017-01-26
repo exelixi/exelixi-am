@@ -30,7 +30,7 @@
  *
  */
 
-package xyz.exelixi.phases.vivadohls;
+package xyz.exelixi.backend.hls.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
@@ -45,6 +45,7 @@ import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.types.CallableType;
 import se.lth.cs.tycho.types.Type;
+import xyz.exelixi.backend.hls.HlsBackendCore;
 import xyz.exelixi.utils.PortOrderComparator;
 
 import java.util.ArrayList;
@@ -59,7 +60,7 @@ import java.util.List;
 @Module
 public interface Structure {
     @Binding
-    VivadoHLSBackend backend();
+    HlsBackendCore backend();
 
     default Emitter emitter() {
         return backend().emitter();

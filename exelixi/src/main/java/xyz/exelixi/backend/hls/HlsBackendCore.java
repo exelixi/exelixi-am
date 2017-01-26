@@ -30,7 +30,7 @@
  *
  */
 
-package xyz.exelixi.phases.vivadohls;
+package xyz.exelixi.backend.hls;
 
 import org.multij.Binding;
 import org.multij.Module;
@@ -42,6 +42,7 @@ import se.lth.cs.tycho.phases.TreeShadow;
 import se.lth.cs.tycho.phases.attributes.*;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.phases.cbackend.util.Box;
+import xyz.exelixi.backend.hls.codegen.*;
 
 import static org.multij.BindingKind.*;
 
@@ -52,7 +53,7 @@ import static org.multij.BindingKind.*;
  * @author Endri Bezati
  */
 @Module
-public interface VivadoHLSBackend {
+public interface HlsBackendCore {
 
     // -- Attributes
     @Binding(INJECTED)
