@@ -3,6 +3,7 @@ package xyz.exelixi.backend.opencl;
 import com.google.auto.service.AutoService;
 import se.lth.cs.tycho.comp.CompilationTask;
 import se.lth.cs.tycho.comp.Context;
+import se.lth.cs.tycho.ir.QID;
 import se.lth.cs.tycho.reporting.CompilationException;
 import xyz.exelixi.backend.ExelixiBackend;
 
@@ -77,5 +78,10 @@ public class OpenClBackend extends ExelixiBackend {
         // Code generations
         addPhase(RemoveUnusedEntityDeclsPhase);
         addPhase(PrintNetworkPhase);
+    }
+
+    @Override
+    public boolean compile(QID entity) {
+        return true;
     }
 }

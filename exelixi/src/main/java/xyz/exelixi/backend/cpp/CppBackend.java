@@ -3,6 +3,7 @@ package xyz.exelixi.backend.cpp;
 import com.google.auto.service.AutoService;
 import se.lth.cs.tycho.comp.CompilationTask;
 import se.lth.cs.tycho.comp.Context;
+import se.lth.cs.tycho.ir.QID;
 import se.lth.cs.tycho.reporting.CompilationException;
 import xyz.exelixi.backend.ExelixiBackend;
 
@@ -62,6 +63,11 @@ public class CppBackend extends ExelixiBackend {
         // Code generations
         addPhase(RemoveUnusedEntityDeclsPhase);
         addPhase(PrintNetworkPhase);
+    }
+
+    @Override
+    public boolean compile(QID entity) {
+        return true;
     }
 
     public String getId() {

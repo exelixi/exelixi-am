@@ -13,26 +13,34 @@ public class BackendsFactory {
     public static final BackendsFactory INSTANCE = new BackendsFactory();
 
 
-    private final List<ExelixiBackend> backends;
+    private final Map<String, ExelixiBackend> backendsMap;
     private final Collection<Phase> registeredPhases;
+
 
     private BackendsFactory() {
         // load the registered backends
-        backends = new ArrayList<>();
+        backendsMap = new HashMap<>();
         ServiceLoader<ExelixiBackend> loader = ServiceLoader.load(ExelixiBackend.class);
-        loader.forEach(b -> backends.add(b));
+        loader.forEach(b -> backendsMap.put(b.getId(), b));
 
         // find all the registered phases
         registeredPhases = new HashSet<>();
-        backends.forEach(b -> registeredPhases.addAll(b.getPhases()));
+        backendsMap.values().forEach(b -> registeredPhases.addAll(b.getPhases()));
+
     }
 
-    public List<ExelixiBackend> getBackends() {
-        return backends;
+    public Collection<ExelixiBackend> getBackends() {
+        return Collections.unmodifiableCollection(backendsMap.values());
     }
 
     public Collection<Phase> getRegisteredPhases() {
-        return registeredPhases;
+        return Collections.unmodifiableCollection(registeredPhases);
     }
+
+    public ExelixiBackend getBackend(String id) {
+        return backendsMap.get(id);
+    }
+
+    public boolean hasBackend(String id){return  backendsMap.containsKey(id);}
 
 }

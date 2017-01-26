@@ -1,7 +1,13 @@
 package xyz.exelixi.backend;
 
+import se.lth.cs.tycho.comp.Context;
+import se.lth.cs.tycho.comp.Loader;
+import se.lth.cs.tycho.ir.QID;
 import se.lth.cs.tycho.phases.*;
+import se.lth.cs.tycho.reporting.Reporter;
+import se.lth.cs.tycho.settings.Configuration;
 import se.lth.cs.tycho.settings.SettingsManager;
+import xyz.exelixi.compiler.HLS.ExelixiHLSLoader;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -63,7 +69,9 @@ public abstract class ExelixiBackend implements Phase {
     public static final Phase RemoveUnusedEntityDeclsPhase = new RemoveUnusedEntityDeclsPhase();
     public static final Phase PrintNetworkPhase = new PrintNetworkPhase();
 
-    private List<Phase> phases;
+    protected List<Phase> phases;
+    protected Configuration configuration;
+    protected Context compilationContext;
 
     public ExelixiBackend() {
         phases = new ArrayList<>();
@@ -86,6 +94,15 @@ public abstract class ExelixiBackend implements Phase {
     public List<Phase> getPhases() {
         return phases;
     }
+
+    public void setConfiguration(Configuration configuration){
+        this.configuration = configuration;
+        Reporter reporter = Reporter.instance(configuration);
+        Loader loader = FrontendLoader.instance(configuration, reporter);
+        this.compilationContext = new Context(configuration, loader, reporter);
+    }
+
+    public abstract  boolean compile(QID entity);
 
 
     public abstract String getId();

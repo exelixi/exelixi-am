@@ -14,7 +14,7 @@ import java.util.List;
  */
 public class Settings {
 
-    public static final Setting<String> backend = new StringSetting() {
+    public static final Setting<String> selectedBackend = new StringSetting() {
         @Override
         public String getKey() {
             return "backend";
