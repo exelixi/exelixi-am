@@ -129,15 +129,14 @@ public interface Structure {
         emitter().emit("// ----------------------------------------------------------------------------");
         emitter().emit("// -- State");
         emitter().emit("");
-        emitter().emit("typedef struct {");
-        emitter().increaseIndentation();
+
 
         if (!actorMachine.getValueParameters().isEmpty()) {
             emitter().emit("// -- parameters");
 
             for (VarDecl param : actorMachine.getValueParameters()) {
                 String decl = code().declaration(types().declaredType(param), backend().variables().declarationName(param));
-                emitter().emit("%s;", decl);
+                emitter().emit("static %s;", decl);
             }
             emitter().emit("");
         }
@@ -148,17 +147,14 @@ public interface Structure {
             backend().callables().declareEnvironmentForCallablesInScope(scope);
             for (VarDecl var : scope.getDeclarations()) {
                 String decl = code().declaration(types().declaredType(var), backend().variables().declarationName(var));
-                emitter().emit("%s;", decl);
+                emitter().emit("static %s;", decl);
             }
             emitter().emit("");
             i++;
         }
-        emitter().decreaseIndentation();
-        emitter().emit("} %s_state;", name);
-        emitter().emit("");
 
-        emitter().emit("static %s_state self;", name);
         emitter().emit("");
+        
         emitter().emit("static int program_counter = -1;");
         emitter().emit("");
     }
@@ -179,11 +175,11 @@ public interface Structure {
                     String wrapperName = backend().callables().externalWrapperFunctionName(var);
                     String variableName = backend().variables().declarationName(var);
                     String t = backend().callables().mangle(type).encode();
-                    emitter().emit("self.%s = (%s) { *%s, NULL };", variableName, t, wrapperName);
+                    emitter().emit("%s = (%s) { *%s, NULL };", variableName, t, wrapperName);
                 } else if (var.getValue() != null) {
                     emitter().emit("{");
                     emitter().increaseIndentation();
-                    code().assign(types().declaredType(var), "self." + backend().variables().declarationName(var), var.getValue());
+                    code().assign(types().declaredType(var), "" + backend().variables().declarationName(var), var.getValue());
                     emitter().decreaseIndentation();
                     emitter().emit("}");
                 }
@@ -211,7 +207,7 @@ public interface Structure {
         if (!actorMachine.getValueParameters().isEmpty()) {
             emitter().emit("// -- parameters");
             actorMachine.getValueParameters().forEach(d -> {
-                emitter().emit("self.%s = %1$s;", backend().variables().declarationName(d));
+                emitter().emit("%s = %1$s;", backend().variables().declarationName(d));
             });
             emitter().emit("");
         }

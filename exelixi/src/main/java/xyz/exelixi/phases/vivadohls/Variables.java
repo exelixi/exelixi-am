@@ -61,7 +61,7 @@ public interface Variables {
         if (decl instanceof ClosureVarDecl) {
             return "(env." + declarationName(decl) + ")";
         } else if (parent instanceof Scope || parent instanceof ActorMachine) {
-            return "(self." + declarationName(decl) + ")";
+            return "(" + declarationName(decl) + ")";
         } else {
             return declarationName(decl);
         }
