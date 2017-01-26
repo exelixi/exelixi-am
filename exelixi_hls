@@ -1,0 +1,24 @@
+#!/bin/bash
+
+
+function readlink_rec {
+	res="$(readlink $1 || echo $1)"
+	if [ $res = $1 ]
+	then
+		echo $res
+	else
+		readlink_rec $res
+	fi
+}
+
+root=`dirname "$(readlink_rec $0)"`
+lib="$root/exelixi/target/lib"
+comp="$root/exelixi/target/exelixi-1.0-SNAPSHOT.jar"
+
+if [ -f "$comp" ]
+then
+	java -cp "$comp:$lib/compiler-1.0-SNAPSHOT.jar:$lib/core-1.0-SNAPSHOT.jar:$lib/multij-core-0.1-SNAPSHOT.jar" xyz.exelixi.compiler.ExelixiHLS "$@"
+else
+	echo "Exelixi HLS is not compiled. Please, run \"mvn install\" to compile Tycho."
+	exit 1
+fi
