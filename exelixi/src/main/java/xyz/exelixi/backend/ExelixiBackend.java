@@ -20,7 +20,7 @@ import static xyz.exelixi.Settings.phaseTimer;
 /**
  * @author Simone Casale-Brunet
  */
-public abstract class ExelixiBackend implements Phase {
+public abstract class ExelixiBackend {
 
     // Parse
     public static final Phase LoadEntityPhase = new LoadEntityPhase();
@@ -73,16 +73,13 @@ public abstract class ExelixiBackend implements Phase {
     public static final Phase RemoveUnusedEntityDeclsPhase = new RemoveUnusedEntityDeclsPhase();
     public static final Phase PrintNetworkPhase = new PrintNetworkPhase();
 
-    protected List<Phase> phases;
+    private List<Phase> phases;
     protected Configuration configuration;
     protected Context compilationContext;
 
     public ExelixiBackend() {
         phases = new ArrayList<>();
-
         registerPhases();
-
-        phases = Collections.unmodifiableList(phases);
     }
 
     protected abstract void registerPhases();
@@ -91,12 +88,12 @@ public abstract class ExelixiBackend implements Phase {
         if (!phases.contains(phase)) {
             phases.add(phase);
         } else {
-            throw new RuntimeException("Phase " + phase.getName() + " already registered in " + getName());
+            throw new RuntimeException("Phase " + phase.getName() + " already registered in " + getId());
         }
     }
 
     public List<Phase> getPhases() {
-        return phases;
+        return Collections.unmodifiableList(phases);
     }
 
     public void setConfiguration(Configuration configuration){
@@ -134,7 +131,7 @@ public abstract class ExelixiBackend implements Phase {
 
     public abstract String getId();
 
-    public CompilationTask execute(CompilationTask compilationTask, Context context) throws CompilationException {
-        return null;
-    }
+    public abstract String getDescription();
+
+
 }
