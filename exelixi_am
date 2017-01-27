@@ -17,7 +17,7 @@ comp="$root/exelixi/target/exelixi-1.0-SNAPSHOT.jar"
 
 if [ -f "$comp" ]
 then
-	java -cp "$comp:$lib/compiler-1.0-SNAPSHOT.jar:$lib/core-1.0-SNAPSHOT.jar:$lib/multij-core-0.1-SNAPSHOT.jar" xyz.exelixi.compiler.ExelixiHLS "$@"
+	java -cp "$comp:$lib/compiler-1.0-SNAPSHOT.jar:$lib/core-1.0-SNAPSHOT.jar:$lib/multij-core-0.1-SNAPSHOT.jar" xyz.exelixi.ExelixiAm "$@"
 else
 	echo "Exelixi HLS is not compiled. Please, run \"mvn install\" to compile Tycho."
 	exit 1
