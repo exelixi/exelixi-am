@@ -1,3 +1,34 @@
+/*
+ * EXELIXI
+ *
+ * Copyright (C) 2017 EPFL SCI-STI-MM
+ *
+ * This file is part of EXELIXI.
+ *
+ * EXELIXI is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * EXELIXI is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with EXELIXI. If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional permission under GNU GPL version 3 section 7
+ *
+ * If you modify this Program, or any covered work, by linking or combining it
+ * with Eclipse (or a modified version of Eclipse or an Eclipse plugin or
+ * an Eclipse library), containing parts covered by the terms of the
+ * Eclipse Public License (EPL), the licensors of this Program grant you
+ * additional permission to convey the resulting work.  Corresponding Source
+ * for a non-source form of such a combination shall include the source code
+ * for the parts of Eclipse libraries used as well as that of the covered work.
+ *
+ */
 package xyz.exelixi;
 
 import se.lth.cs.tycho.ir.QID;
@@ -5,7 +36,7 @@ import se.lth.cs.tycho.phases.Phase;
 import se.lth.cs.tycho.settings.Configuration;
 import se.lth.cs.tycho.settings.Setting;
 import se.lth.cs.tycho.settings.SettingsManager;
-import xyz.exelixi.backend.BackendsFactory;
+import xyz.exelixi.backend.BackendsRegister;
 import xyz.exelixi.backend.ExelixiBackend;
 
 import java.io.File;
@@ -28,7 +59,7 @@ public class ExelixiAm {
     private static final String toolFullName = "Exelixi Actors-Machine Dataflow Compiler";
     private static final String toolVersion = "0.0.1-SNAPSHOT";
 
-    private BackendsFactory backendsFactory;
+    private BackendsRegister backendsRegister;
     private SettingsManager settingsManager;
     private List<String> promotedSettings;
 
@@ -38,7 +69,7 @@ public class ExelixiAm {
     }
 
     public ExelixiAm() {
-        backendsFactory = BackendsFactory.INSTANCE;
+        backendsRegister = BackendsRegister.INSTANCE;
 
         // build a set of unique settings
         Collection<Setting> settings = new HashSet<>();
@@ -54,7 +85,7 @@ public class ExelixiAm {
         settings.add(followLinks);
 
         // collect all the settings required by the available phases
-        settings.addAll(backendsFactory.getRegisteredPhases().stream().flatMap(phase -> phase.getPhaseSettings().stream())
+        settings.addAll(backendsRegister.getRegisteredPhases().stream().flatMap(phase -> phase.getPhaseSettings().stream())
                 .collect(Collectors.toList()));
 
         // create the list to be passed to the builder
@@ -87,7 +118,7 @@ public class ExelixiAm {
                     }
                     //FIXME add compiler
                     case "--print-phases": { // hidden option
-                        printPhases(backendsFactory.getRegisteredPhases());
+                        printPhases(backendsRegister.getRegisteredPhases());
                         System.exit(0);
                     }
                     case "--settings": {
@@ -148,7 +179,7 @@ public class ExelixiAm {
         if(backendId == null){
             printMissingBackend();
             System.exit(1);
-        }else if(!backendsFactory.hasBackend(backendId)){
+        }else if(!backendsRegister.hasBackend(backendId)){
             printUnavailableBackend(backendId);
             System.exit(1);
         }
@@ -157,7 +188,7 @@ public class ExelixiAm {
         Configuration configuration = builder.build();
 
         // select the backend
-        ExelixiBackend backend = backendsFactory.getBackend(backendId);
+        ExelixiBackend backend = backendsRegister.getBackend(backendId);
         backend.setConfiguration(configuration);
 
         if (!backend.compile(qid)) {

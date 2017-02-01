@@ -29,20 +29,29 @@
  * for the parts of Eclipse libraries used as well as that of the covered work.
  *
  */
-package xyz.exelixi.backend.cpp;
+package xyz.exelixi.backend.opencl.aocl;
 
 import com.google.auto.service.AutoService;
-import se.lth.cs.tycho.comp.CompilationTask;
-import se.lth.cs.tycho.comp.Context;
-import se.lth.cs.tycho.ir.QID;
-import se.lth.cs.tycho.reporting.CompilationException;
 import xyz.exelixi.backend.ExelixiBackend;
 
 /**
+ * The Altera OpenCL backend
+ *
  * @author Simone Casale-Brunet
  */
 @AutoService(ExelixiBackend.class)
-public class CppBackend extends ExelixiBackend {
+public class AoclBackend extends ExelixiBackend {
+
+    @Override
+    public String getId() {
+        return "aocl";
+    }
+
+    @Override
+    public String getDescription() {
+        return "Altera OpenCL backend";
+    }
+
 
     @Override
     protected void registerPhases() {
@@ -83,31 +92,17 @@ public class CppBackend extends ExelixiBackend {
         addPhase(ScheduleInitializersPhase);
         addPhase(CloneTreePhase);
         addPhase(MergeManyGuardsPhase);
-        addPhase(CalToAmPhase);
-        addPhase(RemoveEmptyTransitionsPhase);
-        addPhase(ReduceActorMachinePhase);
-        addPhase(CompositionEntitiesUniquePhase);
-        addPhase(CompositionPhase);
-        addPhase(InternalizeBuffersPhase);
-        addPhase(RemoveUnusedConditionsPhase);
-
-        // Code generations
-        addPhase(RemoveUnusedEntityDeclsPhase);
-        addPhase(PrintNetworkPhase);
-    }
-
-    @Override
-    public boolean compile(QID entity) {
-        return true;
-    }
-
-    public String getId() {
-        return "cpp";
-    }
-
-    @Override
-    public String getDescription() {
-        return "Cpp Backend";
+//        addPhase(CalToAmPhase);
+//        addPhase(RemoveEmptyTransitionsPhase);
+//        addPhase(ReduceActorMachinePhase);
+//        addPhase(CompositionEntitiesUniquePhase);
+//        addPhase(CompositionPhase);
+//        addPhase(InternalizeBuffersPhase);
+//        addPhase(RemoveUnusedConditionsPhase);
+//
+//        // Code generations
+//        addPhase(RemoveUnusedEntityDeclsPhase);
+//        addPhase(PrintNetworkPhase);
     }
 
 }

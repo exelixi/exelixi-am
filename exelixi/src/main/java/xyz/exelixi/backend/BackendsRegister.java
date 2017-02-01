@@ -29,26 +29,48 @@
  * for the parts of Eclipse libraries used as well as that of the covered work.
  *
  */
-package xyz.exelixi.frontend;
+package xyz.exelixi.backend;
 
-import se.lth.cs.tycho.comp.*;
-import se.lth.cs.tycho.reporting.Reporter;
-import se.lth.cs.tycho.settings.Configuration;
-import static xyz.exelixi.Settings.*;
+import se.lth.cs.tycho.phases.Phase;
 
-import java.util.Arrays;
+import java.util.*;
 
 /**
  * Created by scb on 1/26/17.
  */
-public interface FrontendLoader extends Loader {
+public class BackendsRegister {
 
-    static Loader instance(Configuration configuration, Reporter reporter) {
-        return new CombinedLoader(Arrays.asList(
-                new CalLoader(reporter, configuration.get(sourcePaths), configuration.get(followLinks)),
-                new OrccLoader(reporter, configuration.get(orccSourcePaths), configuration.get(followLinks)),
-                new XdfLoader(reporter, configuration.get(xdfSourcePaths)),
-                new PreludeLoader(reporter)));
+    public static final BackendsRegister INSTANCE = new BackendsRegister();
+
+
+    private final Map<String, ExelixiBackend> backendsMap;
+    private final Collection<Phase> registeredPhases;
+
+
+    private BackendsRegister() {
+        // load the registered backends
+        backendsMap = new HashMap<>();
+        ServiceLoader<ExelixiBackend> loader = ServiceLoader.load(ExelixiBackend.class);
+        loader.forEach(b -> backendsMap.put(b.getId(), b));
+
+        // find all the registered phases
+        registeredPhases = new HashSet<>();
+        backendsMap.values().forEach(b -> registeredPhases.addAll(b.getPhases()));
+
     }
+
+    public Collection<ExelixiBackend> getBackends() {
+        return Collections.unmodifiableCollection(backendsMap.values());
+    }
+
+    public Collection<Phase> getRegisteredPhases() {
+        return Collections.unmodifiableCollection(registeredPhases);
+    }
+
+    public ExelixiBackend getBackend(String id) {
+        return backendsMap.get(id);
+    }
+
+    public boolean hasBackend(String id){return  backendsMap.containsKey(id);}
 
 }

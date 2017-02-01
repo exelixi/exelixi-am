@@ -1,3 +1,4 @@
+package xyz.exelixi.backend.opencl.xocc;
 /*
  * EXELIXI
  *
@@ -29,20 +30,26 @@
  * for the parts of Eclipse libraries used as well as that of the covered work.
  *
  */
-package xyz.exelixi.backend.cpp;
-
 import com.google.auto.service.AutoService;
-import se.lth.cs.tycho.comp.CompilationTask;
-import se.lth.cs.tycho.comp.Context;
-import se.lth.cs.tycho.ir.QID;
-import se.lth.cs.tycho.reporting.CompilationException;
 import xyz.exelixi.backend.ExelixiBackend;
 
 /**
+ * The Xilinx OpenCL backend
+ *
  * @author Simone Casale-Brunet
  */
 @AutoService(ExelixiBackend.class)
-public class CppBackend extends ExelixiBackend {
+public class XoccBackend extends ExelixiBackend {
+
+    @Override
+    public String getId() {
+        return "xocc";
+    }
+
+    @Override
+    public String getDescription() {
+        return "Xilinx OpenCL backend";
+    }
 
     @Override
     protected void registerPhases() {
@@ -83,31 +90,16 @@ public class CppBackend extends ExelixiBackend {
         addPhase(ScheduleInitializersPhase);
         addPhase(CloneTreePhase);
         addPhase(MergeManyGuardsPhase);
-        addPhase(CalToAmPhase);
-        addPhase(RemoveEmptyTransitionsPhase);
-        addPhase(ReduceActorMachinePhase);
-        addPhase(CompositionEntitiesUniquePhase);
-        addPhase(CompositionPhase);
-        addPhase(InternalizeBuffersPhase);
-        addPhase(RemoveUnusedConditionsPhase);
-
-        // Code generations
-        addPhase(RemoveUnusedEntityDeclsPhase);
-        addPhase(PrintNetworkPhase);
+//        addPhase(CalToAmPhase);
+//        addPhase(RemoveEmptyTransitionsPhase);
+//        addPhase(ReduceActorMachinePhase);
+//        addPhase(CompositionEntitiesUniquePhase);
+//        addPhase(CompositionPhase);
+//        addPhase(InternalizeBuffersPhase);
+//        addPhase(RemoveUnusedConditionsPhase);
+//
+//        // Code generations
+//        addPhase(RemoveUnusedEntityDeclsPhase);
+//        addPhase(PrintNetworkPhase);
     }
-
-    @Override
-    public boolean compile(QID entity) {
-        return true;
-    }
-
-    public String getId() {
-        return "cpp";
-    }
-
-    @Override
-    public String getDescription() {
-        return "Cpp Backend";
-    }
-
 }
