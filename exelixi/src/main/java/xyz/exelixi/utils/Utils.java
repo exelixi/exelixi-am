@@ -31,33 +31,39 @@
  */
 package xyz.exelixi.utils;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Created by endrix on 1/17/17.
+ * @author Endri Bezati
+ * @author Simone Casale-Brunet
  */
 public class Utils {
 
     /**
-     * Create a Directory
+     * Create a directory (recursively)
      *
      * @param parent
      * @param name
      * @return
      */
     public static Path createDirectory(Path parent, String name) {
+        Path path = null;
         try {
-            Path path = parent.resolve(name);
-            if (!path.toFile().exists()) {
-                return Files.createDirectory(parent.resolve(name));
-            } else {
-                return path;
+            File directory = new File(parent.toFile(), name);
+            if(!directory.exists()){
+                if(directory.mkdirs()){
+                    path = directory.toPath();
+                }
+            }else if(directory.isDirectory()) {
+                path = directory.toPath();
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
-        return null;
+
+        return path;
     }
 }

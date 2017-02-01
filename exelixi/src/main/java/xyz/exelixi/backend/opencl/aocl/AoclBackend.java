@@ -33,6 +33,8 @@ package xyz.exelixi.backend.opencl.aocl;
 
 import com.google.auto.service.AutoService;
 import xyz.exelixi.backend.ExelixiBackend;
+import xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase;
+import xyz.exelixi.backend.opencl.aocl.phases.AoclNetworkConformancy;
 
 /**
  * The Altera OpenCL backend
@@ -83,26 +85,14 @@ public class AoclBackend extends ExelixiBackend {
         addPhase(DeadDeclEliminationPhase);
         addPhase(ComputeClosuresPhase);
 
+        // conformancy test
+        addPhase(new AoclNetworkConformancy());
+
         // Actor transformations
         addPhase(RenameActorVariablesPhase);
-        addPhase(LiftProcessVarDeclsPhase);
-        addPhase(ProcessToCalPhase);
-        addPhase(AddSchedulePhase);
-        addPhase(ScheduleUntaggedPhase);
-        addPhase(ScheduleInitializersPhase);
-        addPhase(CloneTreePhase);
-        addPhase(MergeManyGuardsPhase);
-//        addPhase(CalToAmPhase);
-//        addPhase(RemoveEmptyTransitionsPhase);
-//        addPhase(ReduceActorMachinePhase);
-//        addPhase(CompositionEntitiesUniquePhase);
-//        addPhase(CompositionPhase);
-//        addPhase(InternalizeBuffersPhase);
-//        addPhase(RemoveUnusedConditionsPhase);
-//
-//        // Code generations
-//        addPhase(RemoveUnusedEntityDeclsPhase);
-//        addPhase(PrintNetworkPhase);
+
+        // code generation
+        addPhase(new AoclBackendPhase());
     }
 
 }
