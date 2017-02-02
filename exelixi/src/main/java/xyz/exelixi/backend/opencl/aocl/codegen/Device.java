@@ -42,6 +42,7 @@ import se.lth.cs.tycho.ir.decl.GlobalEntityDecl;
 import se.lth.cs.tycho.ir.decl.GlobalVarDecl;
 import se.lth.cs.tycho.ir.decl.VarDecl;
 import se.lth.cs.tycho.ir.network.Instance;
+import se.lth.cs.tycho.ir.network.Network;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.types.CallableType;
@@ -57,8 +58,6 @@ public interface Device {
 
     @Binding
     AoclBackendCore backend();
-
-    default Preprocessor preprocessor() { return backend().preprocessor(); }
 
     default Emitter emitter() { return backend().emitter(); }
 

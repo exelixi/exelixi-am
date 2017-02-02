@@ -34,28 +34,17 @@ package xyz.exelixi.backend.opencl.aocl.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
-import se.lth.cs.tycho.cfg.ActionBlock;
-import se.lth.cs.tycho.cfg.Block;
-import se.lth.cs.tycho.ir.Port;
 import se.lth.cs.tycho.ir.decl.GlobalEntityDecl;
 import se.lth.cs.tycho.ir.decl.VarDecl;
 import se.lth.cs.tycho.ir.entity.Entity;
-import se.lth.cs.tycho.ir.entity.PortDecl;
-import se.lth.cs.tycho.ir.entity.am.*;
 import se.lth.cs.tycho.ir.entity.cal.CalActor;
 import se.lth.cs.tycho.ir.entity.cal.ProcessDescription;
-import se.lth.cs.tycho.ir.expr.Expression;
-import se.lth.cs.tycho.ir.util.ImmutableList;
 import se.lth.cs.tycho.phases.attributes.Names;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
-import se.lth.cs.tycho.types.CallableType;
-import se.lth.cs.tycho.types.Type;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
-import xyz.exelixi.utils.PortOrderComparator;
 
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -99,15 +88,16 @@ public interface Structure {
             throw new Error("unsupported actor type: only processes are supported");
         }
 
-        calActor(name, (CalActor) entity);
+        actorGeneration((CalActor) entity);
     }
 
 
-    default void calActor(String name, CalActor actor) {
+    default void actorGeneration(CalActor actor) {
+        String name = backend().instance().get().getInstanceName();
 
         List<String> parameters = new ArrayList<>();
-        actor.getInputPorts().forEach(x -> parameters.add(code().inputPort(x)));
-        actor.getOutputPorts().forEach(x -> parameters.add(code().outputPort(x)));
+        actor.getInputPorts().forEach(x -> parameters.add(code().inputPortDeclaration(x)));
+        actor.getOutputPorts().forEach(x -> parameters.add(code().outputPortDeclaration(x)));
 
         emitter().emit("#include \"global.h\"");
         emitter().emit("");

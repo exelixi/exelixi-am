@@ -51,6 +51,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * @author Simone Casale-Brunet
@@ -77,10 +78,6 @@ public interface Host {
         return backend().code();
     }
 
-    default Preprocessor preprocessor() {
-        return backend().preprocessor();
-    }
-
     default void generateMakeFile(Path path){
         emitter().open(path.resolve(path.resolve("Makefile")));
         try (InputStream in = ClassLoader.getSystemResourceAsStream("aocl_backend_code/Makefile")) {
@@ -92,9 +89,9 @@ public interface Host {
         emitter().close();
     }
 
-    default void generateSourceCode(Path path) {
+    default void generateLibrary(Path sourcePath, Path includePath) {
         // copy the AOCL library helper source code
-        emitter().open(path.resolve(path.resolve("AOCL.cpp")));
+        emitter().open(sourcePath.resolve(sourcePath.resolve("AOCL.cpp")));
         try (InputStream in = ClassLoader.getSystemResourceAsStream("aocl_backend_code/AOCL.cpp")) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(in));
             reader.lines().forEach(emitter()::emitRawLine);
@@ -103,10 +100,21 @@ public interface Host {
         }
         emitter().close();
 
-        generateMain(backend().task().getNetwork(), path);
+        // copy the AOCL library helper header
+        emitter().open(includePath.resolve(includePath.resolve("AOCL.h")));
+        try (InputStream in = ClassLoader.getSystemResourceAsStream("aocl_backend_code/AOCL.h")) {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+            reader.lines().forEach(emitter()::emitRawLine);
+        } catch (IOException e) {
+            throw CompilationException.from(e);
+        }
+        emitter().close();
+
     }
 
-    default void generateMain(Network network, Path path) {
+    default void generateSourceCode(Path path) {
+        Network network = backend().task().getNetwork();
+
         Map<Object, Integer> kernelsIds = createKernelsIdMap(network);
         Map<Object, String> kernelsNames = createKernelsNameMap(network);
         Map<Connection, Integer> connectionsIds = createConnectionsIdMap(network);
@@ -121,7 +129,7 @@ public interface Host {
         emitter().emit("");
         // constants
         emitter().emit("#define PLATFORM_NAME \"Intel(R) FPGA\"");
-        emitter().emit("#define BINARY_NAME \"Intel(R) FPGA\"");
+        emitter().emit("#define BINARY_NAME \"device.aocx\"");
         emitter().emit("#define QUEUES_SIZE %d", kernelsIds.keySet().size());
         emitter().emit("#define PIPES_SIZE 512");
 
@@ -279,6 +287,7 @@ public interface Host {
         emitter().close();
     }
 
+    //FIXME move in a transformation or in a utility class?
     default Map<Connection, Integer> createConnectionsIdMap(Network network) {
         Map<Connection, Integer> map = new HashMap<>();
         int id = 0;
@@ -310,18 +319,6 @@ public interface Host {
         network.getInputPorts().forEach(p -> map.put(p, p.getName()));
         network.getOutputPorts().forEach(p -> map.put(p, p.getName()));
         return map;
-    }
-
-    default void generateHeaders(Path path) {
-        // copy the AOCL library helper header
-        emitter().open(path.resolve(path.resolve("AOCL.h")));
-        try (InputStream in = ClassLoader.getSystemResourceAsStream("aocl_backend_code/AOCL.h")) {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(in));
-            reader.lines().forEach(emitter()::emitRawLine);
-        } catch (IOException e) {
-            throw CompilationException.from(e);
-        }
-        emitter().close();
     }
 
 }

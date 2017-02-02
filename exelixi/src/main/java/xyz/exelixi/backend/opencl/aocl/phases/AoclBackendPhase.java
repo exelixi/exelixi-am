@@ -98,6 +98,8 @@ public class AoclBackendPhase implements Phase {
                 .instance();
 
 
+
+
         //** generate the devices code **//
         // globals definitions
         core.device().generateGlobals(device_srcPath);
@@ -112,8 +114,8 @@ public class AoclBackendPhase implements Phase {
         core.device().generateInterfaces(device_srcPath);
 
         //**  generate the host code **/
+        core.host().generateLibrary(host_srcPath, host_includePath); // the AOCL library
         core.host().generateSourceCode(host_srcPath);
-        core.host().generateHeaders(host_includePath);
 
         /** generate the Makefile **/
         core.host().generateMakeFile(targetPath);

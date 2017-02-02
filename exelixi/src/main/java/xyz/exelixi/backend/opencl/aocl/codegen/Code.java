@@ -2,14 +2,13 @@ package xyz.exelixi.backend.opencl.aocl.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
+import se.lth.cs.tycho.decoration.PortDeclarations;
 import se.lth.cs.tycho.ir.Generator;
 import se.lth.cs.tycho.ir.Port;
 import se.lth.cs.tycho.ir.decl.ClosureVarDecl;
 import se.lth.cs.tycho.ir.decl.GeneratorVarDecl;
 import se.lth.cs.tycho.ir.decl.VarDecl;
 import se.lth.cs.tycho.ir.entity.PortDecl;
-import se.lth.cs.tycho.ir.entity.am.ActorMachine;
-import se.lth.cs.tycho.ir.entity.am.Transition;
 import se.lth.cs.tycho.ir.expr.*;
 import se.lth.cs.tycho.ir.network.Connection;
 import se.lth.cs.tycho.ir.stmt.*;
@@ -23,6 +22,7 @@ import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.types.*;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
+import xyz.exelixi.utils.PortOrderComparator;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -56,7 +56,7 @@ public interface Code {
     }
 
     default String inputPortTypeSize(Port port) {
-        return "";//backend().channels().targetEndTypeSize(new Connection.End(Optional.of(backend().instance().get().getInstanceName()), port.getName()));
+        return "";//backend().channels().targetEndTypeSize(new Connection.End(Optional.of(backend().instance().get().getInstanceName()), portDeclaration.getName()));
     }
 
     void assign(Type type, String lvalue, Expression expr);
@@ -213,19 +213,17 @@ public interface Code {
 
     String type(Type type);
 
-    default String port(PortDecl portDecl, String direction){
+    default String portDeclaration(PortDecl portDecl, String direction){
         String type = type(types().declaredPortType(portDecl));
         String portName = portDecl.getName();
         String attributes = "__attribute__((blocking))";
         return direction + " pipe " + type + " " + attributes + " " + portName;
     }
 
-    default String inputPort(PortDecl portDecl) {
-        return port(portDecl, "read_only");
-    }
+    default String inputPortDeclaration(PortDecl portDecl) { return portDeclaration(portDecl, "read_only");  }
 
-    default String outputPort(PortDecl portDecl) {
-        return port(portDecl, "write_only");
+    default String outputPortDeclaration(PortDecl portDecl) {
+        return portDeclaration(portDecl, "write_only");
     }
 
 
@@ -331,7 +329,7 @@ public interface Code {
             case "and":
             case "&&":
                 String andResult = variables().generateTemp();
-                emitter().emit("_Bool %s;", andResult);
+                emitter().emit("bool %s;", andResult);
                 emitter().emit("if (%s) {", evaluate(left));
                 emitter().increaseIndentation();
                 emitter().emit("%s = %s;", andResult, evaluate(right));

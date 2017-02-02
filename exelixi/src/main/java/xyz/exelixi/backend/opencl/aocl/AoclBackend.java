@@ -90,7 +90,6 @@ public class AoclBackend extends ExelixiBackend {
 
         // Actor transformations
         addPhase(RenameActorVariablesPhase);
-
         // code generation
         addPhase(new AoclBackendPhase());
     }

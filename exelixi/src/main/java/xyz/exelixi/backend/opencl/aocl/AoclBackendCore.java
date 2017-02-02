@@ -76,9 +76,6 @@ public interface AoclBackendCore {
 
     // -- Code Genearation
     @Binding(MODULE)
-    Preprocessor preprocessor();
-
-    @Binding(MODULE)
     FileNotice fileNotice();
 
     @Binding(MODULE)
