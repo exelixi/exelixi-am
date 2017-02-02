@@ -1,0 +1,54 @@
+namespace Repeat :
+
+	int A = 3;
+	int B = 5;
+
+	actor IdRepeatOut () uint(size=8) In ==> uint(size=8) Out :
+		List(type: uint(size=8), size=A) list;
+		int i;
+		repeat
+			i := 0;
+			while i < A do
+				In --> list[i];
+				i := i + 1;
+			end
+			Out <-- list repeat A;
+		end
+	end
+
+	actor IdRepeatIn () uint(size=8) In ==> uint(size=8) Out :
+		List(type: uint(size=8), size=B) list;
+		int i;
+		repeat
+			In --> list repeat B;
+			i := 0;
+			while i < B do
+				Out <-- list[i];
+				i := i + 1;
+			end
+		end
+	end
+
+	actor Buffer () uint(size=8) In ==> uint(size=8) Out :
+		uint(size=8) variable;
+		repeat
+			In --> variable;
+			Out <-- variable;
+		end
+	end
+
+	network IdRepeatChain () uint(size=8) In ==> uint(size=8) Out :
+		entities
+			id1 = IdRepeatOut();
+			b1 = Buffer();
+			b2 = Buffer();
+			id2 = IdRepeatIn();
+
+		structure
+			In --> id1.In;
+			id1.Out --> b1.In;
+			b1.Out --> b2.In;
+			b2.Out --> id2.In;
+			id2.Out --> Out;
+	end
+end
