@@ -83,44 +83,42 @@ public class AoclBackendPhase implements Phase {
     public CompilationTask execute(CompilationTask task, Context context) throws CompilationException {
 
         // create the directories
-        createDirectories(context);
+        // Get target Path
+        targetPath = context.getConfiguration().get(Settings.targetPath);
+
+        host_srcPath = Utils.createDirectory(targetPath, "host" + File.separator + "src");
+        host_includePath = Utils.createDirectory(targetPath, "host" + File.separator + "include");
+
+        device_srcPath = Utils.createDirectory(targetPath, "device");
 
         // open the core
-        AoclBackendCore core = openCore(task, context);
+        AoclBackendCore core = MultiJ.from(AoclBackendCore.class)
+                .bind("task").to(task)
+                .bind("context").to(context)
+                .instance();
 
-        core.global().generateGlobalHeader(device_srcPath);
 
-        // generate actors code
+        //** generate the devices code **//
+        // globals definitions
+        core.device().generateGlobals(device_srcPath);
+
+        // actors kernel implementations
         for (Instance instance : core.task().getNetwork().getInstances()) {
             // Generate CL source code
-            core.actor().generateSourceCode(instance, device_srcPath);
+            core.device().generateActor(instance, device_srcPath);
         }
+
+        // fictitious actors as kernel interfaces
+        core.device().generateInterfaces(device_srcPath);
+
+        //**  generate the host code **/
+        core.host().generateSourceCode(host_srcPath);
+        core.host().generateHeaders(host_includePath);
+
+        /** generate the Makefile **/
+        core.host().generateMakeFile(targetPath);
 
         return task;
     }
 
-    private AoclBackendCore openCore(CompilationTask task, Context context) {
-        return MultiJ.from(AoclBackendCore.class)
-                .bind("task").to(task)
-                .bind("context").to(context)
-                .instance();
-    }
-
-
-
-    /**
-     * Create AOCL directories
-     *
-     * @param context
-     */
-    private void createDirectories(Context context) {
-        // Get target Path
-        targetPath = context.getConfiguration().get(Settings.targetPath);
-
-        host_srcPath = Utils.createDirectory(targetPath, "host"+ File.separator+"src");
-        host_includePath = Utils.createDirectory(targetPath, "host"+ File.separator+"include");
-
-        device_srcPath = Utils.createDirectory(targetPath, "device");
-
-    }
 }

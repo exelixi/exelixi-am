@@ -82,7 +82,10 @@ public interface AoclBackendCore {
     FileNotice fileNotice();
 
     @Binding(MODULE)
-    Actor actor();
+    Device device();
+
+    @Binding(MODULE)
+    Host host();
 
     @Binding(MODULE)
     DefaultValues defaultValues();
@@ -99,6 +102,4 @@ public interface AoclBackendCore {
     @Binding(MODULE)
     Callables callables();
 
-    @Binding(MODULE)
-    Global global();
 }

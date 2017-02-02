@@ -27,9 +27,8 @@ public interface Preprocessor {
         emitter().emit("#ifndef __%s__", token.toUpperCase());
     }
 
-    default void define(String token) {
-        emitter().emit("#define __%s__", token.toUpperCase());
-        emitter().emit("");
+    default void define(String token, String value) {
+        emitter().emit("#define %s %s", token.toUpperCase(), value);
     }
 
     default void endif() {

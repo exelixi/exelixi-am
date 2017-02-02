@@ -1,7 +1,7 @@
 /*
  * EXELIXI
  *
- * Copyright (C) 2017 Endri Bezati, EPFL SCI-STI-MM
+ * Copyright (C) 2017 EPFL SCI-STI-MM
  *
  * This file is part of EXELIXI.
  *
@@ -29,44 +29,50 @@
  * for the parts of Eclipse libraries used as well as that of the covered work.
  *
  */
-
 package xyz.exelixi.backend.opencl.aocl.codegen;
+
+/**
+ * @author Simone Casale-Brunet
+ */
 
 import org.multij.Binding;
 import org.multij.Module;
 import se.lth.cs.tycho.comp.SourceUnit;
 import se.lth.cs.tycho.ir.decl.GlobalEntityDecl;
-import se.lth.cs.tycho.ir.entity.cal.CalActor;
+import se.lth.cs.tycho.ir.decl.GlobalVarDecl;
+import se.lth.cs.tycho.ir.decl.VarDecl;
 import se.lth.cs.tycho.ir.network.Instance;
+import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
-import xyz.exelixi.backend.hls.HlsBackendCore;
+import se.lth.cs.tycho.types.CallableType;
+import se.lth.cs.tycho.types.Type;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 
 import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Collectors;
 
-/**
- * Altera OpenCL Actor Code Generation
- *
- * @author Simone Casale-Brunet
- */
 @Module
-public interface Actor {
+public interface Device {
+
     @Binding
     AoclBackendCore backend();
 
-    default Preprocessor preprocessor() {
-        return backend().preprocessor();
+    default Preprocessor preprocessor() { return backend().preprocessor(); }
+
+    default Emitter emitter() { return backend().emitter(); }
+
+    default Structure structure() { return backend().structure(); }
+
+    default Types types() {
+        return backend().types();
     }
 
-    default Emitter emitter() {
-        return backend().emitter();
+    default Code code() {
+        return backend().code();
     }
 
-    default Structure structure() {
-        return backend().structure();
-    }
-
-    default void generateSourceCode(Instance instance, Path path) {
+    default void generateActor(Instance instance, Path path) {
         backend().instance().set(instance);
         GlobalEntityDecl actor = backend().task().getSourceUnits().stream()
                 .map(SourceUnit::getTree)
@@ -82,7 +88,7 @@ public interface Actor {
         emitter().open(path.resolve(fileName));
 
         // -- File Notice
-        backend().fileNotice().generateNotice("Source code for Instance: " + instance.getInstanceName() + ", Actor: "+instance.getEntityName());
+        backend().fileNotice().generateNotice("Source code for Instance: " + instance.getInstanceName() + ", Actor: " + instance.getEntityName());
         emitter().emit("");
 
         // -- Actor Structure Declaration
@@ -93,4 +99,42 @@ public interface Actor {
         backend().instance().clear();
     }
 
+    default void generateInterfaces(Path path){
+
+    }
+
+    default void generateGlobals(Path path) {
+        emitter().open(path.resolve(path.resolve("global.h")));
+        emitter().emit("#ifndef GLOBAL_H");
+        emitter().emit("#define GLOBAL_H");
+        emitter().emit("");
+        globalVariableDeclarations(getGlobalVarDecls());
+        emitter().emit("");
+        emitter().emit("#endif");
+        emitter().close();
+    }
+
+    default void globalVariableDeclarations(List<GlobalVarDecl> varDecls) {
+        for (VarDecl decl : varDecls) {
+            Type type = types().declaredType(decl);
+            if (decl.isExternal() && type instanceof CallableType) {
+                throw new Error("Not supported");
+                /*
+                String wrapperName = backend().callables().externalWrapperFunctionName(decl);
+                String variableName = backend().variables().declarationName(decl);
+                String t = backend().callables().mangle(type).encode();
+                emitter().emit("%s = (%s) { *%s, NULL };", variableName, t, wrapperName);
+                */
+            } else {
+                emitter().emit("#define %s %s", backend().variables().declarationName(decl), code().evaluate(decl.getValue()));
+            }
+        }
+    }
+
+    default List<GlobalVarDecl> getGlobalVarDecls() {
+        return backend().task()
+                .getSourceUnits().stream()
+                .flatMap(unit -> unit.getTree().getVarDecls().stream())
+                .collect(Collectors.toList());
+    }
 }
