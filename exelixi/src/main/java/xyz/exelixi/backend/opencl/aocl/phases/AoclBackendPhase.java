@@ -34,19 +34,16 @@ package xyz.exelixi.backend.opencl.aocl.phases;
 import org.multij.MultiJ;
 import se.lth.cs.tycho.comp.CompilationTask;
 import se.lth.cs.tycho.comp.Context;
-import se.lth.cs.tycho.ir.decl.GlobalVarDecl;
 import se.lth.cs.tycho.ir.network.Instance;
 import se.lth.cs.tycho.phases.Phase;
 import se.lth.cs.tycho.reporting.CompilationException;
 import xyz.exelixi.Settings;
-import xyz.exelixi.backend.hls.HlsBackendCore;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
+import xyz.exelixi.utils.ModelHelper;
 import xyz.exelixi.utils.Utils;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * @author Simone Casale-Brunet
@@ -97,8 +94,7 @@ public class AoclBackendPhase implements Phase {
                 .bind("context").to(context)
                 .instance();
 
-
-
+        core.helper().set(ModelHelper.create(task.getNetwork()));
 
         //** generate the devices code **//
         // globals definitions

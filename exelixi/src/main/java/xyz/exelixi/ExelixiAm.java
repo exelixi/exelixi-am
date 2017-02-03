@@ -71,7 +71,7 @@ public class ExelixiAm {
     public ExelixiAm() {
         backendsRegister = BackendsRegister.INSTANCE;
 
-        // build a set of unique settings
+        // create a set of unique settings
         Collection<Setting> settings = new HashSet<>();
 
         // these are the default options required by every backend
@@ -184,7 +184,7 @@ public class ExelixiAm {
             System.exit(1);
         }
 
-        // ok, now build the configuration
+        // ok, now create the configuration
         Configuration configuration = builder.build();
 
         // select the backend

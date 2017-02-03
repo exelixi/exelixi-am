@@ -77,7 +77,6 @@ public class AoclBackend extends ExelixiBackend {
         addPhase(TypeAnnotationAnalysisPhase);
         addPhase(TypeAnalysisPhase);
         addPhase(AddTypeAnnotationsPhase);
-
         addPhase(CreateNetworkPhase);
         addPhase(ResolveGlobalEntityNamesPhase);
         addPhase(ResolveGlobalVariableNamesPhase);
@@ -87,6 +86,7 @@ public class AoclBackend extends ExelixiBackend {
 
         // conformancy test
         addPhase(new AoclNetworkConformancy());
+       // addPhase(new RenamePortsPhase()); //FIXME tobe removed: now it is done "indirectly" by using the ModelHelper during code generation
 
         // Actor transformations
         addPhase(RenameActorVariablesPhase);

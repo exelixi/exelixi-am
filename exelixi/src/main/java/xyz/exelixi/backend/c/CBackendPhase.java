@@ -53,7 +53,7 @@ public class CBackendPhase implements Phase {
         targetPath = context.getConfiguration().get(Settings.targetPath);
         srcPath = createDirectory(targetPath, "src");
         includePath = createDirectory(targetPath, "include");
-        createDirectory(targetPath, "build");
+        createDirectory(targetPath, "create");
         createDirectory(targetPath, "bin");
 
         // -- Generate Libs

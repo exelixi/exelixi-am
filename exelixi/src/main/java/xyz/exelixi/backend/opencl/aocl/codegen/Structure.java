@@ -97,7 +97,7 @@ public interface Structure {
 
         List<String> parameters = new ArrayList<>();
         actor.getInputPorts().forEach(x -> parameters.add(code().inputPortDeclaration(x)));
-        actor.getOutputPorts().forEach(x -> parameters.add(code().outputPortDeclaration(x)));
+        actor.getOutputPorts().forEach(x -> parameters.addAll(code().outputPortDeclaration(x)));
 
         emitter().emit("#include \"global.h\"");
         emitter().emit("");

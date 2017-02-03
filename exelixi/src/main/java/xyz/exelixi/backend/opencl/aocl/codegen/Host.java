@@ -42,6 +42,7 @@ import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.reporting.CompilationException;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
+import xyz.exelixi.utils.ModelHelper;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -61,6 +62,8 @@ public interface Host {
 
     @Binding
     AoclBackendCore backend();
+
+    default ModelHelper helper() { return backend().helper().get(); }
 
     default Emitter emitter() {
         return backend().emitter();
@@ -187,9 +190,9 @@ public interface Host {
         emitter().emit("test_error(status, \"ERROR: Failed to create the program.\\n\", &cleanup);");
         emitter().emit("");
 
-        emitter().emit("// build the program");
+        emitter().emit("// create the program");
         emitter().emit("status = clBuildProgram(program, 1, &device, \"\", NULL, NULL);");
-        emitter().emit("test_error(status, \"ERROR: Failed to build the program.\\n\", &cleanup);");
+        emitter().emit("test_error(status, \"ERROR: Failed to create the program.\\n\", &cleanup);");
         emitter().emit("");
 
         emitter().emit("// create the kernels");

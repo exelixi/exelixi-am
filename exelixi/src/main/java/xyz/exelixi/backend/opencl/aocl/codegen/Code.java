@@ -22,6 +22,7 @@ import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.types.*;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
+import xyz.exelixi.utils.ModelHelper;
 import xyz.exelixi.utils.PortOrderComparator;
 
 import java.util.*;
@@ -33,6 +34,8 @@ import static org.multij.BindingKind.MODULE;
 public interface Code {
     @Binding(MODULE)
     AoclBackendCore backend();
+
+    default ModelHelper helper() { return backend().helper().get(); }
 
     default Emitter emitter() {
         return backend().emitter();
@@ -213,17 +216,28 @@ public interface Code {
 
     String type(Type type);
 
-    default String portDeclaration(PortDecl portDecl, String direction){
+    default String inputPortDeclaration(PortDecl portDecl) {
+        Connection connection = helper().getIncoming(backend().instance().get().getInstanceName(), portDecl.getName());
+        int id = helper().getConnectionId(connection);
+
         String type = type(types().declaredPortType(portDecl));
         String portName = portDecl.getName();
         String attributes = "__attribute__((blocking))";
-        return direction + " pipe " + type + " " + attributes + " " + portName;
+        return "read_only" + " pipe " + type + " " + attributes + " " + " FIFO_" + id;
     }
 
-    default String inputPortDeclaration(PortDecl portDecl) { return portDeclaration(portDecl, "read_only");  }
+    default List<String> outputPortDeclaration(PortDecl portDecl) {
+        List<String> declarations = new ArrayList<>();
+        List<Connection> connections = helper().getOutgoings(backend().instance().get().getInstanceName(), portDecl.getName());
+        connections.forEach(c -> {
+                    int id = helper().getConnectionId(c);
+                    String type = type(types().declaredPortType(portDecl));
+                    String attributes = "__attribute__((blocking))";
+                    declarations.add("write_only" + " pipe " + type + " " + attributes + " " + "FIFO_" + id);
+                }
+        );
 
-    default String outputPortDeclaration(PortDecl portDecl) {
-        return portDeclaration(portDecl, "write_only");
+        return declarations;
     }
 
 
@@ -552,22 +566,27 @@ public interface Code {
     void execute(Statement stmt);
 
     default void execute(StmtConsume consume) {
-        if(consume.getNumberOfTokens() == 1){
-            emitter().emit("%s.read();",consume.getPort().getName());
-        }else{
-            emitter().emit("for(int i = 0; i <= %d; i++){",consume.getNumberOfTokens());
+        if (consume.getNumberOfTokens() == 1) {
+            emitter().emit("%s.read();", consume.getPort().getName());
+        } else {
+            emitter().emit("for(int i = 0; i <= %d; i++){", consume.getNumberOfTokens());
             emitter().increaseIndentation();
-            emitter().emit("%s.read();",consume.getPort().getName());
+            emitter().emit("%s.read();", consume.getPort().getName());
             emitter().decreaseIndentation();
             emitter().emit("}");
         }
     }
+
     default void execute(StmtRead read) {
         String portName = read.getPort().getName();
+        Connection connection = helper().getIncoming(backend().instance().get().getInstanceName(), portName);
+        int id = helper().getConnectionId(connection);
+        String fifoName = "FIFO_" + id;
+
         if (read.getRepeatExpression() == null) {
             String portType = type(types().portType(read.getPort()));
             for (LValue lvalue : read.getLValues()) {
-               emitter().emit("read_pipe(%s, &%s);" , portName, lvalue(lvalue));
+                emitter().emit("read_pipe(%s, &%s);", fifoName, lvalue(lvalue));
             }
         } else if (read.getLValues().size() == 1) {
             String portType = type(types().portType(read.getPort()));
@@ -576,7 +595,7 @@ public interface Code {
             String temp = variables().generateTemp();
             emitter().emit("for (int %1$s = 0; %1$s < %2$s; %1$s++) {", temp, repeat);
             emitter().increaseIndentation();
-            emitter().emit("read_pipe(%s, %s[%s]);",portName, value, temp);
+            emitter().emit("read_pipe(%s, %s[%s]);", fifoName, value, temp);
             emitter().decreaseIndentation();
             emitter().emit("}");
         } else {
@@ -586,21 +605,35 @@ public interface Code {
 
     default void execute(StmtWrite write) {
         String portName = write.getPort().getName();
+        // create list of fifos to be written
+        List<String> fifoNames = new ArrayList<>();
+        List<Connection> connections = helper().getOutgoings(backend().instance().get().getInstanceName(), portName);
+        connections.forEach(connection -> {
+            int id = helper().getConnectionId(connection);
+            fifoNames.add("FIFO_" + id);
+        });
+
         if (write.getRepeatExpression() == null) {
             String portType = type(types().portType(write.getPort()));
             for (Expression expr : write.getValues()) {
-                emitter().emit("write_pipe(%s, &%s);", portName, evaluate(expr));
+                fifoNames.forEach(fifo -> {
+                    emitter().emit("write_pipe(%s, &%s);", fifo, evaluate(expr));
+                });
+
             }
         } else if (write.getValues().size() == 1) {
             String portType = type(types().portType(write.getPort()));
             String value = evaluate(write.getValues().get(0));
             String repeat = evaluate(write.getRepeatExpression());
             String temp = variables().generateTemp();
-            emitter().emit("for (int %1$s = 0; %1$s < %2$s; %1$s++) {", temp, repeat);
-            emitter().increaseIndentation();
-            emitter().emit("write_pipe(%s, &%s[%s]);",portName, value, temp);
-            emitter().decreaseIndentation();
-            emitter().emit("}");
+            for (String fifo : fifoNames) {
+                emitter().emit("for (int %1$s = 0; %1$s < %2$s; %1$s++) {", temp, repeat);
+                emitter().increaseIndentation();
+                emitter().emit("write_pipe(%s, &%s[%s]);", fifo, value, temp);
+                emitter().decreaseIndentation();
+                emitter().emit("}");
+            }
+
         } else {
             throw new Error("not implemented");
         }
