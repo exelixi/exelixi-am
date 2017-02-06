@@ -46,9 +46,9 @@ public interface Interfaces {
         emitter().emit("");
 
         List<String> parameters = new ArrayList<>();
-        parameters.add("__global int *in");
-        parameters.add("__global int *read_ptr");
-        parameters.add("__global int *write_ptr");
+        parameters.add("__global int * restrict in");
+        parameters.add("__global int * restrict read_ptr");
+        parameters.add("__global int * restrict write_ptr");
         parameters.add("write_only pipe int __attribute__((blocking)) FIFO_" + fifoId);
         emitter().emit("__kernel void %s(%s){", name, String.join(", ", parameters));
         emitter().emit("");
@@ -62,7 +62,7 @@ public interface Interfaces {
         emitter().emit("for (int i = 0; i < count; ++i) {");
         emitter().increaseIndentation();
         emitter().emit("int value = in[(i + tmp_read) %% FIFO_DEPTH];");
-        emitter().emit("write_pipe(AB, & value);");
+        emitter().emit("write_pipe(FIFO_%d, & value);", fifoId);
         emitter().decreaseIndentation();
         emitter().emit("}");
         emitter().emit("*read_ptr = (tmp_read + count) %% FIFO_DEPTH;");
@@ -89,9 +89,9 @@ public interface Interfaces {
         emitter().emit("");
 
         List<String> parameters = new ArrayList<>();
-        parameters.add("__global int *out");
-        parameters.add("__global int *read_ptr");
-        parameters.add("__global int *write_ptr");
+        parameters.add("__global int * restrict out");
+        parameters.add("__global int * restrict read_ptr");
+        parameters.add("__global int * restrict write_ptr");
         parameters.add("read_only pipe int __attribute__((blocking)) FIFO_" + fifoId);
         emitter().emit("__kernel void %s(%s){", name, String.join(", ", parameters));
         emitter().emit("");

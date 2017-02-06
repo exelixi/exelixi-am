@@ -590,7 +590,7 @@ public interface Code {
             String temp = variables().generateTemp();
             emitter().emit("for (int %1$s = 0; %1$s < %2$s; %1$s++) {", temp, repeat);
             emitter().increaseIndentation();
-            emitter().emit("read_pipe(%s, %s[%s]);", fifoName, value, temp);
+            emitter().emit("read_pipe(%s, &%s[%s]);", fifoName, value, temp);
             emitter().decreaseIndentation();
             emitter().emit("}");
         } else {
