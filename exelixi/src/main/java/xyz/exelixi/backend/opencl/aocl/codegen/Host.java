@@ -43,6 +43,7 @@ import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.reporting.CompilationException;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 import xyz.exelixi.utils.ModelHelper;
+import xyz.exelixi.utils.Pair;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -120,7 +121,6 @@ public interface Host {
 
         Map<Object, Integer> kernelsIds = createKernelsIdMap(network);
         Map<Object, String> kernelsNames = createKernelsNameMap(network);
-        Map<Connection, Integer> connectionsIds = createConnectionsIdMap(network);
 
         // create the main
         emitter().open(path.resolve(path.resolve("main.cpp")));
@@ -202,16 +202,41 @@ public interface Host {
         }
         emitter().emit("");
 
-        emitter().emit("// create the pipe"); // FIXME add pipe type
+        emitter().emit("// create the pipe"); // FIXME add pipe TYPE
         for (Connection connection : network.getConnections()) {
-            emitter().emit("cl_mem pipe_%d = clCreatePipe(context, 0, sizeof(cl_int), PIPES_SIZE, NULL, &status); ", connectionsIds.get(connection));
-            emitter().emit("test_error(status, \"ERROR: Failed to create the pipe %d.\\n\", &cleanup);", connectionsIds.get(connection));
+            int fifoId = helper().getConnectionId(connection);
+            emitter().emit("cl_mem pipe_%d = clCreatePipe(context, 0, sizeof(cl_int), PIPES_SIZE, NULL, &status); ", fifoId);
+            emitter().emit("test_error(status, \"ERROR: Failed to create the pipe %d.\\n\", &cleanup);", fifoId);
         }
         emitter().emit("");
 
+        //TODO fictitious interface buffers
+
         emitter().emit("// Set the kernel arguments");
-        //TODO to be done
+        for (Instance instance : network.getInstances()){
+            int i = 0;
+            String kernel_name = kernelsNames.get(instance);
+            for(Pair<PortDecl, Connection> incoming : helper ().getIncomings(instance.getInstanceName())){
+                PortDecl port = incoming.v1;
+                Connection connection = incoming.v2;
+                int fifoId = helper().getConnectionId(connection);
+                emitter().emit("// instance: %s, in-port: %s", instance.getInstanceName(), port.getName());
+                emitter().emit("status = clSetKernelArg(kernel_%s, %d, sizeof(cl_mem), &pipe_%d);", kernel_name, i, fifoId);
+                i++;
+            }
+            for(Pair<PortDecl, Connection> outgoing : helper().getOutgoings(instance.getInstanceName())){
+                PortDecl port = outgoing.v1;
+                Connection connection = outgoing.v2;
+                int fifoId = helper().getConnectionId(connection);
+                emitter().emit("// instance: %s, out-port: %s", instance.getInstanceName(), port.getName());
+                emitter().emit("status = clSetKernelArg(kernel_%s, %d, sizeof(cl_mem), &pipe_%d);", kernel_name, i, fifoId);
+                i++;
+            }
+        }
         emitter().emit("");
+
+        //TODO pipes for fictitious kernel interfaces
+
 
         emitter().emit("printf(\"\\nKernels initialization is complete.\\n\");");
         emitter().emit("printf(\"Launching the kernels...\\n\");");

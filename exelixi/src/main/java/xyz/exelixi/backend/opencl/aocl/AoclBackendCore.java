@@ -105,4 +105,7 @@ public interface AoclBackendCore {
     @Binding(MODULE)
     Callables callables();
 
+    @Binding(MODULE)
+    Interfaces interfaces();
+
 }

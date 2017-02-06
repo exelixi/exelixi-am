@@ -23,6 +23,7 @@ import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.types.*;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 import xyz.exelixi.utils.ModelHelper;
+import xyz.exelixi.utils.Pair;
 import xyz.exelixi.utils.PortOrderComparator;
 
 import java.util.*;
@@ -35,7 +36,9 @@ public interface Code {
     @Binding(MODULE)
     AoclBackendCore backend();
 
-    default ModelHelper helper() { return backend().helper().get(); }
+    default ModelHelper helper() {
+        return backend().helper().get();
+    }
 
     default Emitter emitter() {
         return backend().emitter();
@@ -216,8 +219,7 @@ public interface Code {
 
     String type(Type type);
 
-    default String inputPortDeclaration(PortDecl portDecl) {
-        Connection connection = helper().getIncoming(backend().instance().get().getInstanceName(), portDecl.getName());
+    default String inputPortDeclaration(PortDecl portDecl, Connection connection) {
         int id = helper().getConnectionId(connection);
 
         String type = type(types().declaredPortType(portDecl));
@@ -226,18 +228,11 @@ public interface Code {
         return "read_only" + " pipe " + type + " " + attributes + " " + " FIFO_" + id;
     }
 
-    default List<String> outputPortDeclaration(PortDecl portDecl) {
-        List<String> declarations = new ArrayList<>();
-        List<Connection> connections = helper().getOutgoings(backend().instance().get().getInstanceName(), portDecl.getName());
-        connections.forEach(c -> {
-                    int id = helper().getConnectionId(c);
-                    String type = type(types().declaredPortType(portDecl));
-                    String attributes = "__attribute__((blocking))";
-                    declarations.add("write_only" + " pipe " + type + " " + attributes + " " + "FIFO_" + id);
-                }
-        );
-
-        return declarations;
+    default String outputPortDeclaration(PortDecl portDecl, Connection connection) {
+        int id = helper().getConnectionId(connection);
+        String type = type(types().declaredPortType(portDecl));
+        String attributes = "__attribute__((blocking))";
+        return "write_only" + " pipe " + type + " " + attributes + " " + "FIFO_" + id;
     }
 
 
@@ -357,7 +352,7 @@ public interface Code {
             case "||":
             case "or":
                 String orResult = variables().generateTemp();
-                emitter().emit("_Bool %s;", orResult);
+                emitter().emit("bool %s;", orResult);
                 emitter().emit("if (%s) {", evaluate(left));
                 emitter().increaseIndentation();
                 emitter().emit("%s = true;", orResult);
@@ -626,13 +621,15 @@ public interface Code {
             String value = evaluate(write.getValues().get(0));
             String repeat = evaluate(write.getRepeatExpression());
             String temp = variables().generateTemp();
+
+            emitter().emit("for (int %1$s = 0; %1$s < %2$s; %1$s++) {", temp, repeat);
+            emitter().increaseIndentation();
             for (String fifo : fifoNames) {
-                emitter().emit("for (int %1$s = 0; %1$s < %2$s; %1$s++) {", temp, repeat);
-                emitter().increaseIndentation();
                 emitter().emit("write_pipe(%s, &%s[%s]);", fifo, value, temp);
-                emitter().decreaseIndentation();
-                emitter().emit("}");
             }
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+
 
         } else {
             throw new Error("not implemented");

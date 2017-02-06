@@ -37,12 +37,15 @@ import org.multij.Module;
 import se.lth.cs.tycho.ir.decl.GlobalEntityDecl;
 import se.lth.cs.tycho.ir.decl.VarDecl;
 import se.lth.cs.tycho.ir.entity.Entity;
+import se.lth.cs.tycho.ir.entity.PortDecl;
 import se.lth.cs.tycho.ir.entity.cal.CalActor;
 import se.lth.cs.tycho.ir.entity.cal.ProcessDescription;
+import se.lth.cs.tycho.ir.network.Connection;
 import se.lth.cs.tycho.phases.attributes.Names;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
+import xyz.exelixi.utils.Pair;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -81,7 +84,7 @@ public interface Structure {
 
     default void actorGeneration(GlobalEntityDecl decl) {
         String name = backend().instance().get().getInstanceName();
-        System.out.println("generating source code for actor: " + name);
+        System.out.println("Generating source code for actor: " + name);
 
         Entity entity = decl.getEntity();
         if(!(entity instanceof  CalActor)){
@@ -89,6 +92,7 @@ public interface Structure {
         }
 
         actorGeneration((CalActor) entity);
+
     }
 
 
@@ -96,8 +100,13 @@ public interface Structure {
         String name = backend().instance().get().getInstanceName();
 
         List<String> parameters = new ArrayList<>();
-        actor.getInputPorts().forEach(x -> parameters.add(code().inputPortDeclaration(x)));
-        actor.getOutputPorts().forEach(x -> parameters.addAll(code().outputPortDeclaration(x)));
+        backend().helper().get().getIncomings(name).stream().forEach(p -> parameters.add(code().inputPortDeclaration(p.v1, p.v2)));
+        backend().helper().get().getOutgoings(name).stream().forEach(p -> parameters.add(code().outputPortDeclaration(p.v1,p.v2)));
+
+
+
+       // actor.getInputPorts().forEach(x -> parameters.add(code().inputPortDeclaration(x)));
+       // actor.getOutputPorts().forEach(x -> parameters.addAll(code().outputPortDeclaration(x)));
 
         emitter().emit("#include \"global.h\"");
         emitter().emit("");

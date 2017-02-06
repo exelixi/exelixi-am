@@ -4,6 +4,10 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Table;
 import com.google.common.collect.Tables;
 import se.lth.cs.tycho.comp.CompilationTask;
+import se.lth.cs.tycho.comp.SourceUnit;
+import se.lth.cs.tycho.ir.decl.GlobalEntityDecl;
+import se.lth.cs.tycho.ir.entity.PortDecl;
+import se.lth.cs.tycho.ir.entity.cal.CalActor;
 import se.lth.cs.tycho.ir.network.Connection;
 import se.lth.cs.tycho.ir.network.Instance;
 import se.lth.cs.tycho.ir.network.Network;
@@ -21,14 +25,35 @@ public class ModelHelper {
     private Table<Pair<String, String>, Pair<String, String>, Connection> connectionsTable;
     private Map<Pair<String, String>, List<Connection>> outputConnestionsMap;
     private Map<Pair<String, String>, Connection> inputConnectionsMap;
+    private Map<String, List<Pair<PortDecl, Connection>>> incomings;
+    private Map<String, List<Pair<PortDecl, Connection>>> outgoings;
+    private Map<Instance, CalActor> entityDeclMap;
+    private List<Connection> inputs;
+    private List<Connection> outputs;
 
+    private ModelHelper(CompilationTask task) {
+        this.network = task.getNetwork();
 
-    private ModelHelper(Network network) {
-        this.network = network;
-
+        entityDeclMap = new HashMap<>();
         instancesMap = new HashMap<>();
+        incomings = new HashMap<>();
+        outgoings = new HashMap<>();
+        inputs = new ArrayList<>();
+        outputs = new ArrayList<>();
+
         for (Instance instance : network.getInstances()) {
             instancesMap.put(instance.getInstanceName(), instance);
+
+            CalActor actor = (CalActor) task.getSourceUnits().stream()
+                    .map(SourceUnit::getTree)
+                    .filter(ns -> ns.getQID().equals(instance.getEntityName().getButLast()))
+                    .flatMap(ns -> ns.getEntityDecls().stream())
+                    .filter(decl -> decl.getName().equals(instance.getEntityName().getLast().toString()))
+                    .findFirst().get().getEntity();
+            entityDeclMap.put(instance, actor);
+
+            incomings.put(instance.getInstanceName(), new ArrayList<>());
+            outgoings.put(instance.getInstanceName(), new ArrayList<>());
         }
 
         connectionsList = new ArrayList<>(network.getConnections());
@@ -54,11 +79,26 @@ public class ModelHelper {
             if (srcInstance != null) {
                 outputConnestionsMap.putIfAbsent(source, new ArrayList<>());
                 outputConnestionsMap.get(source).add(connection);
+
+                Instance instance = instancesMap.get(srcInstance);
+                CalActor actor = entityDeclMap.get(instance);
+                PortDecl port = actor.getOutputPorts().stream().filter(p -> p.getName().equals(srcPort)).findFirst().get();
+
+                outgoings.get(srcInstance).add(Pair.create(port, connection));
+            }else{
+                inputs.add(connection);
             }
 
             // incoming connection of an instance
             if (tgtInstance != null) {
                 inputConnectionsMap.put(target, connection);
+
+                Instance instance = instancesMap.get(tgtInstance);
+                CalActor actor = entityDeclMap.get(instance);
+                PortDecl port = actor.getInputPorts().stream().filter(p -> p.getName().equals(tgtPort)).findFirst().get();
+                incomings.get(tgtInstance).add(Pair.create(port, connection));
+            }else{
+                outputs.add(connection);
             }
         }
 
@@ -72,16 +112,24 @@ public class ModelHelper {
         return connectionsList.indexOf(connection);
     }
 
-    public static ModelHelper create(Network network) {
-        return new ModelHelper(network);
+    public static ModelHelper create(CompilationTask task) {
+        return new ModelHelper(task);
     }
 
-    public Connection getIncoming(String instance, String inputPort) {
-        return inputConnectionsMap.get(Pair.create(instance, inputPort));
+    public Connection getIncoming(String instance, String inputPort) { return inputConnectionsMap.get(Pair.create(instance, inputPort));}
+
+    public List<Pair<PortDecl, Connection>> getIncomings(String instance) {return incomings.get(instance);}
+
+    public List<Pair<PortDecl, Connection>> getOutgoings(String instance) { return outgoings.get(instance); }
+
+    public List<Connection> getOutgoings(String instance, String outputPort) { return outputConnestionsMap.getOrDefault(Pair.create(instance, outputPort), Collections.EMPTY_LIST);}
+
+    public List<Connection> getInputs(){
+        return Collections.unmodifiableList(inputs);
     }
 
-    public List<Connection> getOutgoings(String instance, String outputPort) {
-        return outputConnestionsMap.getOrDefault(Pair.create(instance, outputPort), Collections.EMPTY_LIST);
+    public List<Connection> getOutputs(){
+        return Collections.unmodifiableList(outputs);
     }
 
 

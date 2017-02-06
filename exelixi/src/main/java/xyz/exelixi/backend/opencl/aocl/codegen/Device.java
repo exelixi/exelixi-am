@@ -72,14 +72,16 @@ public interface Device {
         return backend().code();
     }
 
-    default void generateActor(Instance instance, Path path) {
+    default void generateInstance(Instance instance, Path path) {
         backend().instance().set(instance);
+
         GlobalEntityDecl actor = backend().task().getSourceUnits().stream()
                 .map(SourceUnit::getTree)
                 .filter(ns -> ns.getQID().equals(instance.getEntityName().getButLast()))
                 .flatMap(ns -> ns.getEntityDecls().stream())
                 .filter(decl -> decl.getName().equals(instance.getEntityName().getLast().toString()))
                 .findFirst().get();
+
         String fileNameBase = instance.getInstanceName();
         // -- Filename
         String fileName = fileNameBase + ".cl";
@@ -99,16 +101,13 @@ public interface Device {
         backend().instance().clear();
     }
 
-    default void generateInterfaces(Path path){
-
-    }
-
     default void generateGlobals(Path path) {
         emitter().open(path.resolve(path.resolve("global.h")));
         emitter().emit("#ifndef GLOBAL_H");
         emitter().emit("#define GLOBAL_H");
         emitter().emit("");
         globalVariableDeclarations(getGlobalVarDecls());
+        emitter().emit("#define FIFO_DEPTH 512");
         emitter().emit("");
         emitter().emit("#endif");
         emitter().close();

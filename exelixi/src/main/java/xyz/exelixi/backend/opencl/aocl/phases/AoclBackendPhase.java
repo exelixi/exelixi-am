@@ -34,7 +34,10 @@ package xyz.exelixi.backend.opencl.aocl.phases;
 import org.multij.MultiJ;
 import se.lth.cs.tycho.comp.CompilationTask;
 import se.lth.cs.tycho.comp.Context;
+import se.lth.cs.tycho.ir.entity.PortDecl;
+import se.lth.cs.tycho.ir.network.Connection;
 import se.lth.cs.tycho.ir.network.Instance;
+import se.lth.cs.tycho.ir.network.Network;
 import se.lth.cs.tycho.phases.Phase;
 import se.lth.cs.tycho.reporting.CompilationException;
 import xyz.exelixi.Settings;
@@ -94,20 +97,30 @@ public class AoclBackendPhase implements Phase {
                 .bind("context").to(context)
                 .instance();
 
-        core.helper().set(ModelHelper.create(task.getNetwork()));
+        ModelHelper helper = ModelHelper.create(task);
+        core.helper().set(helper);
 
         //** generate the devices code **//
         // globals definitions
         core.device().generateGlobals(device_srcPath);
 
         // actors kernel implementations
-        for (Instance instance : core.task().getNetwork().getInstances()) {
-            // Generate CL source code
-            core.device().generateActor(instance, device_srcPath);
+        Network network = core.task().getNetwork();
+
+        // Generate CL source code for every instance
+        for (Instance instance : network.getInstances()) {
+            core.device().generateInstance(instance, device_srcPath);
         }
 
-        // fictitious actors as kernel interfaces
-        core.device().generateInterfaces(device_srcPath);
+        // Generate CL source code for every input port
+        for(Connection connection : helper.getInputs()){
+            core.interfaces().generateInputInterface(connection, device_srcPath);
+        }
+
+        // Generate CL source code for every output port
+        for(Connection connection : helper.getOutputs()){
+            core.interfaces().generateOutputInterface(connection, device_srcPath);
+        }
 
         //**  generate the host code **/
         core.host().generateLibrary(host_srcPath, host_includePath); // the AOCL library
@@ -115,6 +128,9 @@ public class AoclBackendPhase implements Phase {
 
         /** generate the Makefile **/
         core.host().generateMakeFile(targetPath);
+
+        // clear the model helper, we do not need it anymore
+        core.helper().clear();
 
         return task;
     }
