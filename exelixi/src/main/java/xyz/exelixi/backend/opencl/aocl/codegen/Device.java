@@ -46,11 +46,17 @@ import se.lth.cs.tycho.ir.network.Instance;
 import se.lth.cs.tycho.ir.network.Network;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
+import se.lth.cs.tycho.reporting.CompilationException;
 import se.lth.cs.tycho.types.CallableType;
 import se.lth.cs.tycho.types.Type;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -135,5 +141,21 @@ public interface Device {
                 .getSourceUnits().stream()
                 .flatMap(unit -> unit.getTree().getVarDecls().stream())
                 .collect(Collectors.toList());
+    }
+
+    default void generateSynthesisScript(Path path) {
+        emitter().open(path.resolve(path.resolve("aocl_synthesis.sh")));
+        List<String> kernels = new ArrayList<>();
+        for(Instance instance : backend().task().getNetwork().getInstances()){
+            kernels.add("device/" + instance.getInstanceName()+".cl");
+        }
+        for(Connection connection : backend().helper().get().getBorders()){
+            int id = backend().helper().get().getConnectionId(connection);
+            kernels.add("device/interface_"+id+".cl");
+        }
+
+        emitter().emit("#!/bin/bash");
+        emitter().emit("aoc -march=emulator %s -o bin/device.aocx", String.join(" ", kernels));
+        emitter().close();
     }
 }

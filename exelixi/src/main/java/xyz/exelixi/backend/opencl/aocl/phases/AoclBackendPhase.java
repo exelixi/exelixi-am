@@ -129,6 +129,9 @@ public class AoclBackendPhase implements Phase {
         /** generate the Makefile **/
         core.host().generateMakeFile(targetPath);
 
+        /** generate the Synthesis script **/
+        core.device().generateSynthesisScript(targetPath);
+
         // clear the model helper, we do not need it anymore
         core.helper().clear();
 
