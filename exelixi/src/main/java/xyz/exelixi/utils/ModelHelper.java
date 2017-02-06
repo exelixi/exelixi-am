@@ -128,8 +128,13 @@ public class ModelHelper {
         return Collections.unmodifiableList(inputs);
     }
 
-    public List<Connection> getOutputs(){
-        return Collections.unmodifiableList(outputs);
+    public List<Connection> getOutputs(){ return Collections.unmodifiableList(outputs); }
+
+    public List<Connection> getBorders(){
+        List<Connection> borders = new ArrayList<>();
+        borders.addAll(getInputs());
+        borders.addAll(getOutputs());
+        return  borders;
     }
 
 

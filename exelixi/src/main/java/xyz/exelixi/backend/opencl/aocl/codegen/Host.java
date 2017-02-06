@@ -64,7 +64,9 @@ public interface Host {
     @Binding
     AoclBackendCore backend();
 
-    default ModelHelper helper() { return backend().helper().get(); }
+    default ModelHelper helper() {
+        return backend().helper().get();
+    }
 
     default Emitter emitter() {
         return backend().emitter();
@@ -82,7 +84,7 @@ public interface Host {
         return backend().code();
     }
 
-    default void generateMakeFile(Path path){
+    default void generateMakeFile(Path path) {
         emitter().open(path.resolve(path.resolve("Makefile")));
         try (InputStream in = ClassLoader.getSystemResourceAsStream("aocl_backend_code/Makefile")) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(in));
@@ -129,12 +131,14 @@ public interface Host {
         emitter().emit("#include \"AOCL.h\"");
         emitter().emit("#include <stdio.h>");
         emitter().emit("#include <string.h>");
+        emitter().emit("#include <pthread.h>");
         emitter().emit("");
         // constants
         emitter().emit("#define PLATFORM_NAME \"Intel(R) FPGA\"");
         emitter().emit("#define BINARY_NAME \"device.aocx\"");
         emitter().emit("#define QUEUES_SIZE %d", kernelsIds.keySet().size());
         emitter().emit("#define PIPES_SIZE 512");
+        emitter().emit("#define THREADS_SIZE %d", helper().getBorders().size());
 
         emitter().emit("");
         kernelsNames.entrySet().stream().forEach(k -> emitter().emit("#define QUEUE_%s %d", k.getValue().toUpperCase(), kernelsIds.get(k.getKey())));
@@ -148,8 +152,68 @@ public interface Host {
         kernelsNames.values().forEach(k -> emitter().emit("cl_kernel kernel_%s = NULL;", k));
         emitter().emit("");
 
+        // interfaces buffers
+        emitter().emit("pthread_t threads[THREADS_SIZE];");
+        emitter().emit("");
+
+        for(Connection connection : helper().getBorders()){
+            int fifoId = helper().getConnectionId(connection);
+            emitter().emit("int *interface_%d_buffer;", fifoId); //TODO add TYPE
+            emitter().emit("int *interface_%d_read;", fifoId);
+            emitter().emit("int *interface_%d_write;", fifoId);
+            emitter().emit("");
+        }
+
         emitter().emit("void cleanup();");
         emitter().emit("");
+
+        // input interface threads
+        for (Connection input : helper().getInputs()) {
+            int fifoId = helper().getConnectionId(input);
+            emitter().emit("// input interface thread for FIFO %d", fifoId);
+            emitter().emit("void *ft_interface_%d(void *) {", fifoId);
+            emitter().increaseIndentation();
+            emitter().emit("size_t size = 1;");
+            emitter().emit("cl_event sync;");
+
+            // Launch the kernels
+            String kernelName = kernelsNames.get(input);
+            emitter().emit("cl_int status = clEnqueueNDRangeKernel(queues[QUEUE_INTERFACE_%d], kernel_%s, 1, NULL, &size, &size, 0, NULL, &sync);", fifoId, kernelName);
+            emitter().emit("test_error(status, \"ERROR: Failed to launch  interface fifo %d.\\n\", &cleanup);", fifoId);
+
+            emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", fifoId);
+            emitter().emit("return NULL;");
+
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+            emitter().emit("");
+        }
+        emitter().emit("");
+
+        // output interface threads
+        for (Connection output : helper().getOutputs()) {
+            int fifoId = helper().getConnectionId(output);
+            emitter().emit("// input interface thread for FIFO %d", fifoId);
+            emitter().emit("");
+            emitter().emit("void *ft_interface_%d(void *) {", fifoId);
+            emitter().increaseIndentation();
+            emitter().emit("size_t size = 1;");
+            emitter().emit("cl_event sync;");
+
+            // Launch the kernels
+            String kernelName = kernelsNames.get(output);
+            emitter().emit("cl_int status = clEnqueueNDRangeKernel(queues[QUEUE_INTERFACE_%d], kernel_%s, 1, NULL, &size, &size, 0, NULL, &sync);", fifoId, kernelName);
+            emitter().emit("test_error(status, \"ERROR: Failed to launch  interface fifo %d.\\n\", &cleanup);", fifoId);
+
+            emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", fifoId);
+            emitter().emit("return NULL;");
+
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+            emitter().emit("");
+        }
+        emitter().emit("");
+
 
         emitter().emit("int main() {");//FIXME add options
         emitter().increaseIndentation();
@@ -195,6 +259,7 @@ public interface Host {
         emitter().emit("test_error(status, \"ERROR: Failed to create the program.\\n\", &cleanup);");
         emitter().emit("");
 
+        // for each instance and in/out interface create a kernel
         emitter().emit("// create the kernels");
         for (String kernel : kernelsNames.values()) {
             emitter().emit("kernel_%s = clCreateKernel(program, \"%s\", &status);", kernel, kernel);
@@ -210,13 +275,11 @@ public interface Host {
         }
         emitter().emit("");
 
-        //TODO fictitious interface buffers
-
         emitter().emit("// Set the kernel arguments");
-        for (Instance instance : network.getInstances()){
+        for (Instance instance : network.getInstances()) {
             int i = 0;
             String kernel_name = kernelsNames.get(instance);
-            for(Pair<PortDecl, Connection> incoming : helper ().getIncomings(instance.getInstanceName())){
+            for (Pair<PortDecl, Connection> incoming : helper().getIncomings(instance.getInstanceName())) {
                 PortDecl port = incoming.v1;
                 Connection connection = incoming.v2;
                 int fifoId = helper().getConnectionId(connection);
@@ -224,7 +287,7 @@ public interface Host {
                 emitter().emit("status = clSetKernelArg(kernel_%s, %d, sizeof(cl_mem), &pipe_%d);", kernel_name, i, fifoId);
                 i++;
             }
-            for(Pair<PortDecl, Connection> outgoing : helper().getOutgoings(instance.getInstanceName())){
+            for (Pair<PortDecl, Connection> outgoing : helper().getOutgoings(instance.getInstanceName())) {
                 PortDecl port = outgoing.v1;
                 Connection connection = outgoing.v2;
                 int fifoId = helper().getConnectionId(connection);
@@ -235,14 +298,38 @@ public interface Host {
         }
         emitter().emit("");
 
-        //TODO pipes for fictitious kernel interfaces
 
+        // create the buffers for the interfaces
+        emitter().emit("// create the interface buffers");
+        for (Connection connection : helper().getBorders()) {
+            int fifoId = helper().getConnectionId(connection);
+            emitter().emit("interface_%d_buffer = (int *) malloc(sizeof(int) * PIPES_SIZE);", fifoId); //TODO add fifo TYPE
+            emitter().emit("cl_mem mem_interface_%d_buffer = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int) * PIPES_SIZE, interface_%d_buffer, &status);", fifoId, fifoId);
+            emitter().emit("interface_%d_read   = (int *) malloc(sizeof(int));", fifoId);
+            emitter().emit("cl_mem mem_interface_%d_read = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int), interface_%d_read, &status);", fifoId, fifoId);
+            emitter().emit("interface_%d_write  = (int *) malloc(sizeof(int));", fifoId);
+            emitter().emit("cl_mem mem_interface_%d_write = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int), interface_%d_write, &status);", fifoId, fifoId);
+        }
+        emitter().emit("");
+
+        emitter().emit("// link buffers and interface kernels");
+        for (Connection connection : helper().getBorders()) {
+            // Set the kernel arguments
+            int fifoId = helper().getConnectionId(connection);
+            String kernelName = kernelsNames.get(connection);
+            emitter().emit("status = clSetKernelArg(kernel_%s, 0, sizeof(cl_mem), &mem_interface_%d_buffer);", kernelName, fifoId);
+            emitter().emit("test_error(status, \"ERROR: Failed to set kernel %s arg 0.\\n\", &cleanup);", kernelName);
+            emitter().emit("status = clSetKernelArg(kernel_%s, 1, sizeof(cl_mem), &mem_interface_%d_read);", kernelName, fifoId);
+            emitter().emit("test_error(status, \"ERROR: Failed to set kernel %s arg 1.\\n\", &cleanup);", kernelName);
+            emitter().emit("status = clSetKernelArg(kernel_%s, 2, sizeof(cl_mem), &mem_interface_%d_write);", kernelName, fifoId);
+            emitter().emit("test_error(status, \"ERROR: Failed to set kernel %s arg 2.\\n\", &cleanup);", kernelName);
+            emitter().emit("status = clSetKernelArg(kernel_%s, 3, sizeof(cl_mem), &pipe_%d);", kernelName, fifoId);
+            emitter().emit("test_error(status, \"ERROR: Failed to set kernel %s arg 3.\\n\", &cleanup);", kernelName);
+        }
+        emitter().emit("");
 
         emitter().emit("printf(\"\\nKernels initialization is complete.\\n\");");
         emitter().emit("printf(\"Launching the kernels...\\n\");");
-        emitter().emit("");
-
-        emitter().emit("cl_event sync;");
         emitter().emit("");
 
         // a task for each instance
@@ -252,10 +339,21 @@ public interface Host {
         }
         emitter().emit("");
 
-        // the input interfaces
+        // the kernel interfaces
+        int threadId = 0;
+        for (Connection connection : helper().getBorders()) {
+            int fifoId = helper().getConnectionId(connection);
+            emitter().emit("pthread_create(&threads[%d], NULL, ft_interface_%d, NULL);", threadId, fifoId);
+            threadId++;
+        }
+        emitter().emit("");
 
-
-        // the output interfaces
+        emitter().emit("for(int i = 0; i < THREADS_SIZE; i++){");
+        emitter().increaseIndentation();
+        emitter().emit("pthread_join(threads[i], NULL);");
+        emitter().decreaseIndentation();
+        emitter().emit("}");
+        emitter().emit("");
 
 
         // end here
@@ -272,7 +370,7 @@ public interface Host {
         emitter().increaseIndentation();
         emitter().emit("");
 
-        for(String kernel : kernelsNames.values()) {
+        for (String kernel : kernelsNames.values()) {
             emitter().emit("if(kernel_%s)", kernel);
             emitter().emit("{");
             emitter().increaseIndentation();
@@ -331,11 +429,11 @@ public interface Host {
         for (Instance instance : network.getInstances()) {
             map.put(instance, index++);
         }
-        for (PortDecl port : network.getInputPorts()) {
-            map.put(port, index++);
+        for (Connection input : helper().getInputs()) {
+            map.put(input, index++);
         }
-        for (PortDecl port : network.getOutputPorts()) {
-            map.put(port, index++);
+        for (Connection output : helper().getOutputs()) {
+            map.put(output, index++);
         }
 
         return map;
@@ -344,8 +442,14 @@ public interface Host {
     default Map<Object, String> createKernelsNameMap(Network network) {
         Map<Object, String> map = new HashMap<>();
         network.getInstances().forEach(i -> map.put(i, i.getInstanceName()));
-        network.getInputPorts().forEach(p -> map.put(p, p.getName()));
-        network.getOutputPorts().forEach(p -> map.put(p, p.getName()));
+        for (Connection input : helper().getInputs()) {
+            int fifoId = helper().getConnectionId(input);
+            map.put(input, "interface_" + fifoId);
+        }
+        for (Connection output : helper().getOutputs()) {
+            int fifoId = helper().getConnectionId(output);
+            map.put(output, "interface_" + fifoId);
+        }
         return map;
     }
 
