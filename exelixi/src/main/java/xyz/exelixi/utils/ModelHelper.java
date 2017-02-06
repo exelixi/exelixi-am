@@ -31,6 +31,7 @@ public class ModelHelper {
     private List<Connection> inputs;
     private List<Connection> outputs;
 
+
     private ModelHelper(CompilationTask task) {
         this.network = task.getNetwork();
 

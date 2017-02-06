@@ -116,6 +116,16 @@ public interface Host {
         }
         emitter().close();
 
+        // copy the utils library helper header
+        emitter().open(includePath.resolve(includePath.resolve("utils.h")));
+        try (InputStream in = ClassLoader.getSystemResourceAsStream("aocl_backend_code/utils.h")) {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+            reader.lines().forEach(emitter()::emitRawLine);
+        } catch (IOException e) {
+            throw CompilationException.from(e);
+        }
+        emitter().close();
+
     }
 
     default void generateSourceCode(Path path) {
@@ -129,6 +139,7 @@ public interface Host {
         backend().fileNotice().generateNotice("Host source code");
         // includes
         emitter().emit("#include \"AOCL.h\"");
+        emitter().emit("#include \"utils.h\"");
         emitter().emit("#include <stdio.h>");
         emitter().emit("#include <string.h>");
         emitter().emit("#include <pthread.h>");
@@ -175,13 +186,64 @@ public interface Host {
             emitter().increaseIndentation();
             emitter().emit("size_t size = 1;");
             emitter().emit("cl_event sync;");
+            emitter().emit("");
 
-            // Launch the kernels
-            String kernelName = kernelsNames.get(input);
-            emitter().emit("cl_int status = clEnqueueNDRangeKernel(queues[QUEUE_INTERFACE_%d], kernel_%s, 1, NULL, &size, &size, 0, NULL, &sync);", fifoId, kernelName);
-            emitter().emit("test_error(status, \"ERROR: Failed to launch  interface fifo %d.\\n\", &cleanup);", fifoId);
+            emitter().emit("FILE *fp;");
+            emitter().emit("fp = fopen(\"%s.txt\", \"r\");", input.getSource().getPort());
+            emitter().emit("char * line;");
+            emitter().emit("");
 
+            emitter().emit("size_t len = 0;");
+            emitter().emit("ssize_t read = 0;");
+            emitter().emit("int read_status = 0;");
+            emitter().emit("");
+
+            emitter().emit("");
+
+            emitter().emit("if (fp != NULL) {");
+            emitter().increaseIndentation();
+
+            emitter().emit("while (read != -1) {");
+            emitter().increaseIndentation();
+            emitter().emit("int parsedTokens = 0;");
+            emitter().emit("int rooms = (PIPES_SIZE + *interface_%d_read - *interface_%d_write - 1) %% PIPES_SIZE;", fifoId, fifoId);
+            emitter().emit("while (rooms && (read = getline(&line, &len, fp)) != -1) {");
+            emitter().increaseIndentation();
+            emitter().emit("int value = parse_int(line, &read_status);");
+            emitter().emit("if (status) {");
+            emitter().increaseIndentation();
+            emitter().emit("interface_%d_buffer[(*interface_%d_write + parsedTokens) %% PIPES_SIZE] = value;", fifoId, fifoId);
+            emitter().emit("parsedTokens++;");
+            emitter().emit("rooms--;");
+            emitter().decreaseIndentation();
+            emitter().emit("} else {");
+            emitter().increaseIndentation();
+            emitter().emit("read = -1;");
+            emitter().emit("break;");
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+
+            emitter().emit("if (parsedTokens) {");
+            emitter().increaseIndentation();
+            emitter().emit("*interface_0_write += parsedTokens;");
+            emitter().emit("cl_int status = clEnqueueNDRangeKernel(queues[QUEUE_INTERFACE_%d], kernel_%s, 1, NULL, &size, &size, 0, NULL, &sync);", fifoId, kernelsNames.get(input));
+            emitter().emit("test_error(status, \"ERROR: Failed to launch interface 0 kernel.\\n\", &cleanup);");
             emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", fifoId);
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+            emitter().decreaseIndentation();
+            emitter().emit("}else{");
+            emitter().increaseIndentation();
+            emitter().emit("printf(\"ERROR: unable to read file input_%s.txt\\n\");", input.getSource().getPort());
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+
+
             emitter().emit("return NULL;");
 
             emitter().decreaseIndentation();
