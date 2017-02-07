@@ -33,7 +33,6 @@ package xyz.exelixi.backend.opencl.aocl.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
-import se.lth.cs.tycho.ir.Port;
 import se.lth.cs.tycho.ir.entity.PortDecl;
 import se.lth.cs.tycho.ir.network.Connection;
 import se.lth.cs.tycho.ir.network.Instance;
@@ -52,8 +51,6 @@ import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 
 /**
  * @author Simone Casale-Brunet
@@ -143,6 +140,7 @@ public interface Host {
         emitter().emit("#include <stdio.h>");
         emitter().emit("#include <string.h>");
         emitter().emit("#include <pthread.h>");
+        emitter().emit("#include <chrono>");
         emitter().emit("");
         // constants
         emitter().emit("#define PLATFORM_NAME \"Intel(R) FPGA\"");
@@ -167,6 +165,13 @@ public interface Host {
         emitter().emit("pthread_t threads[THREADS_SIZE];");
         emitter().emit("");
 
+        // timers
+        emitter().emit("using Clock = std::chrono::high_resolution_clock;");
+        emitter().emit("using Ms = std::chrono::milliseconds;");
+        emitter().emit("template<class Duration>");
+        emitter().emit("using TimePoint = std::chrono::time_point<Clock, Duration>;");
+        emitter().emit("");
+
         for(Connection connection : helper().getBorders()){
             int fifoId = helper().getConnectionId(connection);
             emitter().emit("int *interface_%d_buffer;", fifoId); //TODO add TYPE
@@ -184,25 +189,19 @@ public interface Host {
             emitter().emit("// input interface thread for FIFO %d", fifoId);
             emitter().emit("void *ft_interface_%d(void *) {", fifoId);
             emitter().increaseIndentation();
-            emitter().emit("size_t size = 1;");
-            emitter().emit("cl_event sync;");
-            emitter().emit("");
-
             emitter().emit("FILE *fp;");
-            emitter().emit("fp = fopen(\"%s.txt\", \"r\");", input.getSource().getPort());
+            emitter().emit("fp = fopen(\"%s.txt\", \"r\");", input.getTarget().getPort());
             emitter().emit("char * line;");
-            emitter().emit("");
 
             emitter().emit("size_t len = 0;");
             emitter().emit("ssize_t read = 0;");
             emitter().emit("int read_status = 0;");
-            emitter().emit("");
 
-            emitter().emit("");
+            emitter().emit("*interface_%d_read = 0;", fifoId);
+            emitter().emit("*interface_%d_write = 0;", fifoId);
 
             emitter().emit("if (fp != NULL) {");
             emitter().increaseIndentation();
-
             emitter().emit("while (read != -1) {");
             emitter().increaseIndentation();
             emitter().emit("int parsedTokens = 0;");
@@ -210,7 +209,7 @@ public interface Host {
             emitter().emit("while (rooms && (read = getline(&line, &len, fp)) != -1) {");
             emitter().increaseIndentation();
             emitter().emit("int value = parse_int(line, &read_status);");
-            emitter().emit("if (status) {");
+            emitter().emit("if (read_status) {");
             emitter().increaseIndentation();
             emitter().emit("interface_%d_buffer[(*interface_%d_write + parsedTokens) %% PIPES_SIZE] = value;", fifoId, fifoId);
             emitter().emit("parsedTokens++;");
@@ -224,31 +223,30 @@ public interface Host {
             emitter().emit("}");
             emitter().decreaseIndentation();
             emitter().emit("}");
-
             emitter().emit("if (parsedTokens) {");
             emitter().increaseIndentation();
-            emitter().emit("*interface_0_write += parsedTokens;");
-            emitter().emit("cl_int status = clEnqueueNDRangeKernel(queues[QUEUE_INTERFACE_%d], kernel_%s, 1, NULL, &size, &size, 0, NULL, &sync);", fifoId, kernelsNames.get(input));
-            emitter().emit("test_error(status, \"ERROR: Failed to launch interface 0 kernel.\\n\", &cleanup);");
+            emitter().emit("*interface_%d_write += parsedTokens;", fifoId);
+            emitter().emit("cl_int status = clEnqueueTask(queues[QUEUE_INTERFACE_%d], kernel_interface_%d, 0, NULL, NULL);", fifoId, fifoId);
+            emitter().emit("test_error(status, \"ERROR: Failed to launch interface %d kernel.\\n\", &cleanup);", fifoId);
             emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", fifoId);
-            emitter().decreaseIndentation();
-            emitter().emit("}");
-
-            emitter().decreaseIndentation();
-            emitter().emit("}");
             emitter().decreaseIndentation();
             emitter().emit("}else{");
             emitter().increaseIndentation();
-            emitter().emit("printf(\"ERROR: unable to read file input_%s.txt\\n\");", input.getSource().getPort());
+            emitter().emit("pthread_yield();");
             emitter().decreaseIndentation();
             emitter().emit("}");
-
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+            emitter().decreaseIndentation();
+            emitter().emit("} else {");
+            emitter().increaseIndentation();
+            emitter().emit("printf(\"ERROR: unable to read file %s.txt\\n\");", input.getTarget().getPort());
+            emitter().decreaseIndentation();
+            emitter().emit("}");
 
             emitter().emit("return NULL;");
-
-            emitter().decreaseIndentation();
-            emitter().emit("}");
-            emitter().emit("");
+        emitter().decreaseIndentation();
+        emitter().emit("}");
         }
         emitter().emit("");
 
@@ -259,15 +257,39 @@ public interface Host {
             emitter().emit("");
             emitter().emit("void *ft_interface_%d(void *) {", fifoId);
             emitter().increaseIndentation();
-            emitter().emit("size_t size = 1;");
-            emitter().emit("cl_event sync;");
+            emitter().emit("*interface_%d_read = 0;", fifoId);
+            emitter().emit("*interface_%d_write = 0;", fifoId);
 
-            // Launch the kernels
-            String kernelName = kernelsNames.get(output);
-            emitter().emit("cl_int status = clEnqueueNDRangeKernel(queues[QUEUE_INTERFACE_%d], kernel_%s, 1, NULL, &size, &size, 0, NULL, &sync);", fifoId, kernelName);
+            emitter().emit("Clock::time_point _start = Clock::now();");
+            emitter().emit("bool stop = false;");
+            emitter().emit("long count = 0;");
+
+            emitter().emit("while (!stop) {");
+            emitter().increaseIndentation();
+            emitter().emit("count++;");
+            emitter().emit("cl_int status = clEnqueueTask(queues[QUEUE_INTERFACE_%d], kernel_interface_%d, 0, NULL, NULL);", fifoId, fifoId);
             emitter().emit("test_error(status, \"ERROR: Failed to launch  interface fifo %d.\\n\", &cleanup);", fifoId);
-
             emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", fifoId);
+
+            emitter().emit("int count = (PIPES_SIZE + *interface_%d_write - *interface_%d_read ) %% PIPES_SIZE;", fifoId, fifoId);
+            emitter().emit("if(count){");
+            emitter().increaseIndentation();
+                    // consume values
+            emitter().emit("//for(int i = 0; i < count; i++){");
+            emitter().emit("//    printf(\"%%d \", interface_%d_buffer[(*interface_%d_read + i) %% PIPES_SIZE]);", fifoId, fifoId);
+            emitter().emit("//}");
+            emitter().emit("*interface_%d_read = (*interface_%d_read + count) %% PIPES_SIZE;", fifoId, fifoId);
+            emitter().emit("_start = Clock::now();");
+            emitter().decreaseIndentation();
+            emitter().emit("}else{");
+            emitter().increaseIndentation();
+            emitter().emit("stop = TimePoint<Ms>(std::chrono::duration_cast < Ms > (Clock::now() - _start)) > TimePoint<Ms>(Ms(3000));");
+            emitter().emit("pthread_yield();");
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+
             emitter().emit("return NULL;");
 
             emitter().decreaseIndentation();

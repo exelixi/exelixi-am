@@ -1,0 +1,20 @@
+namespace HelloWorld :
+
+	actor Buffer () int(size=8) In ==> int(size=8) Out :
+		int(size=8) i;
+		repeat
+			In --> i;
+			Out <-- i;
+		end
+	end
+
+
+	network Network () int(size=8) In ==> int(size=8) Out :
+		entities
+			buff = Buffer();
+
+		structure
+			In --> buff.In;
+			buff.Out --> Out;
+	end
+end
