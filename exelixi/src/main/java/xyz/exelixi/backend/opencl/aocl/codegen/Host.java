@@ -387,11 +387,11 @@ public interface Host {
         emitter().emit("// create the interface buffers");
         for (Connection connection : helper().getBorders()) {
             int fifoId = helper().getConnectionId(connection);
-            emitter().emit("interface_%d_buffer = (int *) malloc(sizeof(int) * PIPES_SIZE);", fifoId); //TODO add fifo TYPE
+            emitter().emit("interface_%d_buffer = (int *) aligned_malloc(sizeof(int) * PIPES_SIZE);", fifoId); //TODO add fifo TYPE
             emitter().emit("cl_mem mem_interface_%d_buffer = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int) * PIPES_SIZE, interface_%d_buffer, &status);", fifoId, fifoId);
-            emitter().emit("interface_%d_read   = (int *) malloc(sizeof(int));", fifoId);
+            emitter().emit("interface_%d_read   = (int *) aligned_malloc(sizeof(int));", fifoId);
             emitter().emit("cl_mem mem_interface_%d_read = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int), interface_%d_read, &status);", fifoId, fifoId);
-            emitter().emit("interface_%d_write  = (int *) malloc(sizeof(int));", fifoId);
+            emitter().emit("interface_%d_write  = (int *) aligned_malloc(sizeof(int));", fifoId);
             emitter().emit("cl_mem mem_interface_%d_write = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int), interface_%d_write, &status);", fifoId, fifoId);
         }
         emitter().emit("");
