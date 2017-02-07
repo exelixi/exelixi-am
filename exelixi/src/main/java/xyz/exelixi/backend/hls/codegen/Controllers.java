@@ -101,7 +101,7 @@ public interface Controllers {
 
         emitter().increaseIndentation();
         jumpInto(waitTargets.stream().mapToInt(stateMap::get).collect(BitSet::new, BitSet::set, BitSet::or));
-
+        /*
         emitter().emit("INIT:");
         emitter().increaseIndentation();
         List<String> arguments = new ArrayList<String>();
@@ -113,7 +113,8 @@ public interface Controllers {
         emitter().emit("%s_init_actor(%s);", name, String.join(", ", arguments));
         emitter().emit("goto S%d;", stateMap.get(stateList.get(0)));
         emitter().emit("");
-        emitter().decreaseIndentation();
+        */
+        //emitter().decreaseIndentation();
         for (State s : stateList) {
             emitter().emit("S%d:", stateMap.get(s));
             Instruction instruction = s.getInstructions().get(0);
@@ -175,7 +176,7 @@ public interface Controllers {
 
     default void jumpInto(BitSet waitTargets) {
         emitter().emit("switch (program_counter) {");
-        emitter().emit("case -1: goto INIT;");
+        //emitter().emit("case -1: goto INIT;");
         waitTargets.stream().forEach(s -> emitter().emit("case %d: goto S%1$d;", s));
         emitter().emit("}");
         emitter().emit("");

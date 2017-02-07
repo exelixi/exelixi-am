@@ -63,6 +63,7 @@ public class HlsBackend extends ExelixiBackend {
         addPhase(CompositionPhase);
         addPhase(InternalizeBuffersPhase);
         addPhase(RemoveUnusedConditionsPhase);
+        addPhase(LiftScopesPhase);
 
         // Code generations
         addPhase(RemoveUnusedEntityDeclsPhase);

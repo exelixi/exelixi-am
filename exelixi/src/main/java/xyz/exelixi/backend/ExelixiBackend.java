@@ -99,6 +99,7 @@ public abstract class ExelixiBackend {
     public static final Phase CompositionPhase = new CompositionPhase();
     public static final Phase InternalizeBuffersPhase = new InternalizeBuffersPhase();
     public static final Phase RemoveUnusedConditionsPhase = new RemoveUnusedConditionsPhase();
+    public static final Phase LiftScopesPhase = new LiftScopesPhase();
 
     // Code generations
     public static final Phase RemoveUnusedEntityDeclsPhase = new RemoveUnusedEntityDeclsPhase();

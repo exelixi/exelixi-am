@@ -623,7 +623,10 @@ public interface Code {
     default String evaluate(ExprLet let) {
         let.forEachChild(backend().callables()::declareEnvironmentForCallablesInScope);
         for (VarDecl decl : let.getVarDecls()) {
-            emitter().emit("%s = %s;", declaration(types().declaredType(decl), variables().declarationName(decl)), evaluate(decl.getValue()));
+            Type type = types().declaredType(decl);
+            String name = variables().declarationName(decl);
+            emitter().emit("%s;", declaration(type, name));
+            assign(type, name, decl.getValue());
         }
         return evaluate(let.getBody());
     }
@@ -631,12 +634,12 @@ public interface Code {
     void execute(Statement stmt);
 
     default void execute(StmtConsume consume) {
-        if(consume.getNumberOfTokens() == 1){
-            emitter().emit("%s.read();",consume.getPort().getName());
-        }else{
-            emitter().emit("for(int i = 0; i <= %d; i++){",consume.getNumberOfTokens());
+        if (consume.getNumberOfTokens() == 1) {
+            emitter().emit("%s.read();", consume.getPort().getName());
+        } else {
+            emitter().emit("for(int i = 0; i <= %d; i++){", consume.getNumberOfTokens());
             emitter().increaseIndentation();
-            emitter().emit("%s.read();",consume.getPort().getName());
+            emitter().emit("%s.read();", consume.getPort().getName());
             emitter().decreaseIndentation();
             emitter().emit("}");
         }
@@ -659,7 +662,7 @@ public interface Code {
             String temp = variables().generateTemp();
             emitter().emit("for (size_t %1$s = 0; %1$s < %2$s; %1$s++) {", temp, repeat);
             emitter().increaseIndentation();
-            emitter().emit("%s.write(%s[%s]);",portName, value, temp);
+            emitter().emit("%s.write(%s[%s]);", portName, value, temp);
             emitter().decreaseIndentation();
             emitter().emit("}");
         } else {

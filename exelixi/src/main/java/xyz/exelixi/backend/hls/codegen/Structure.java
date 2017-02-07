@@ -101,7 +101,7 @@ public interface Structure {
     default void actor(String name, ActorMachine actorMachine) {
         actorMachineState(name, actorMachine);
         actorMachineScopes(name, actorMachine);
-        actorMachineInit(name, actorMachine);
+        //actorMachineInit(name, actorMachine);
         actorMachineTransitions(name, actorMachine);
         actorMachineConditions(name, actorMachine);
         actorMachineController(name, actorMachine);
@@ -147,16 +147,27 @@ public interface Structure {
             emitter().emit("// -- scope %d", i);
             backend().callables().declareEnvironmentForCallablesInScope(scope);
             for (VarDecl var : scope.getDeclarations()) {
-                String decl = code().declaration(types().declaredType(var), backend().variables().declarationName(var));
-                emitter().emit("static %s;", decl);
+                if (scope.isPersistent()) {
+                    String decl = "";
+                    if (actorMachine.getValueParameters().contains(var)) {
+                        // -- FIXME : Find out that a variable is initalized by a parameter
+                    } else {
+                        decl = code().declaration(types().declaredType(var), backend().variables().declarationName(var));
+                    }
+                    String value = code().evaluate(var.getValue());
+                    emitter().emit("static %s = %s;", decl, value);
+                } else {
+                    String decl = code().declaration(types().declaredType(var), backend().variables().declarationName(var));
+                    emitter().emit("static %s;", decl);
+                }
             }
             emitter().emit("");
             i++;
         }
 
         emitter().emit("");
-        
-        emitter().emit("static int program_counter = -1;");
+
+        emitter().emit("static int program_counter = 0;");
         emitter().emit("");
     }
 
@@ -168,26 +179,28 @@ public interface Structure {
         }
         int i = 0;
         for (Scope scope : actorMachine.getScopes()) {
-            emitter().emit("static void %s_init_scope_%d() {", name, i, name);
-            emitter().increaseIndentation();
-            for (VarDecl var : scope.getDeclarations()) {
-                Type type = types().declaredType(var);
-                if (var.isExternal() && type instanceof CallableType) {
-                    String wrapperName = backend().callables().externalWrapperFunctionName(var);
-                    String variableName = backend().variables().declarationName(var);
-                    String t = backend().callables().mangle(type).encode();
-                    emitter().emit("%s = (%s) { *%s, NULL };", variableName, t, wrapperName);
-                } else if (var.getValue() != null) {
-                    emitter().emit("{");
-                    emitter().increaseIndentation();
-                    code().assign(types().declaredType(var), "" + backend().variables().declarationName(var), var.getValue());
-                    emitter().decreaseIndentation();
-                    emitter().emit("}");
+            if (!scope.isPersistent()) {
+                emitter().emit("static void %s_init_scope_%d() {", name, i, name);
+                emitter().increaseIndentation();
+                for (VarDecl var : scope.getDeclarations()) {
+                    Type type = types().declaredType(var);
+                    if (var.isExternal() && type instanceof CallableType) {
+                        String wrapperName = backend().callables().externalWrapperFunctionName(var);
+                        String variableName = backend().variables().declarationName(var);
+                        String t = backend().callables().mangle(type).encode();
+                        emitter().emit("%s = (%s) { *%s, NULL };", variableName, t, wrapperName);
+                    } else if (var.getValue() != null) {
+                        emitter().emit("{");
+                        emitter().increaseIndentation();
+                        code().assign(types().declaredType(var), "" + backend().variables().declarationName(var), var.getValue());
+                        emitter().decreaseIndentation();
+                        emitter().emit("}");
+                    }
                 }
+                emitter().decreaseIndentation();
+                emitter().emit("}");
+                emitter().emit("");
             }
-            emitter().decreaseIndentation();
-            emitter().emit("}");
-            emitter().emit("");
             i++;
         }
     }
