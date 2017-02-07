@@ -119,7 +119,7 @@ public interface Controllers {
             emitter().emit("S%d:", stateMap.get(s));
             Instruction instruction = s.getInstructions().get(0);
             backend().scopes().init(actorMachine, instruction).stream().forEach(scope ->
-                    emitter().emit("%s_init_scope_%d();", name, scope)
+                    emitter().emit("%s_init_scope_%d(%s);", name, scope, String.join(", ", backend().code().scopeIONames(actorMachine.getScopes().get(scope))))
             );
             emitInstruction(name, instruction, stateMap, actorMachine);
         }
@@ -166,8 +166,8 @@ public interface Controllers {
 
     default void emitInstruction(String name, Exec exec, Map<State, Integer> stateNumbers, ActorMachine actorMachine) {
         Transition transition = actorMachine.getTransitions().get(exec.transition());
-        List<String> arguments = backend().code().transitionIOName(transition);
-        List<String> actorMachineIO = backend().code().actorMachineIOName(actorMachine);
+        List<String> arguments = backend().code().transitionIOName(transition, false);
+        List<String> actorMachineIO = backend().code().actorMachineIOName(actorMachine, false);
         arguments.sort(new PortOrderComparator(actorMachineIO));
         emitter().emit("%s_transition_%d(%s);", name, exec.transition(), String.join(", ", arguments));
         emitter().emit("goto S%d;", stateNumbers.get(exec.target()));

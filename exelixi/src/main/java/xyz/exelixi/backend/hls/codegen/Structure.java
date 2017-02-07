@@ -128,7 +128,7 @@ public interface Structure {
 
     default void actorMachineState(String name, ActorMachine actorMachine) {
         emitter().emit("// ----------------------------------------------------------------------------");
-        emitter().emit("// -- State");
+        emitter().emit("// -- State Variables");
         emitter().emit("");
 
 
@@ -144,7 +144,7 @@ public interface Structure {
 
         int i = 0;
         for (Scope scope : actorMachine.getScopes()) {
-            emitter().emit("// -- scope %d", i);
+            emitter().emit("// -- Scope %d", i);
             backend().callables().declareEnvironmentForCallablesInScope(scope);
             for (VarDecl var : scope.getDeclarations()) {
                 if (scope.isPersistent()) {
@@ -166,7 +166,7 @@ public interface Structure {
         }
 
         emitter().emit("");
-
+        emitter().emit("// -- Actor Machine Program Counter");
         emitter().emit("static int program_counter = 0;");
         emitter().emit("");
     }
@@ -261,18 +261,6 @@ public interface Structure {
 
         for (Transition transition : actorMachine.getTransitions()) {
             List<String> parameters = new ArrayList<String>(transition.getInputRates().size() + transition.getOutputRates().size());
-            // -- Transition has inputs
-            if (!transition.getInputRates().isEmpty()) {
-                for (Port port : transition.getInputRates().keySet()) {
-                    // -- FIXME: Temporary Hack
-                    for (PortDecl portDecl : actorMachine.getInputPorts()) {
-                        if (portDecl.getName().equals(port.getName())) {
-                            parameters.add(backend().code().type(portDecl));
-                        }
-                    }
-                }
-            }
-
             // -- Transitions has outputs
             if (!transition.getOutputRates().isEmpty()) {
                 for (Port port : transition.getOutputRates().keySet()) {
@@ -326,22 +314,18 @@ public interface Structure {
     }
 
     default void evaluateCondition(PortCondition condition, String name, int i) {
-        String parameter = backend().code().type(condition.getPortName());
-        emitter().emit("static bool %s_condition_%d(%s) {", name, i, parameter);
+        String parameterPort = backend().code().type(condition.getPortName());
+        String parameterCount = "uint32_t " + condition.getPortName().getName() + "_count";
+        emitter().emit("static bool %s_condition_%d(%s, %s) {", name, i, parameterPort, parameterCount);
         emitter().increaseIndentation();
-        // -- TODO Implement repeat in a circular buffer
         if (condition.isInputCondition()) {
-            if (condition.N() > 1) {
-                emitter().emit("// -- Repeat Not implemented");
-            }
-            emitter().emit("return !%s.empty();", condition.getPortName().getName());
+            emitter().emit("return !%s.empty() && %s_count > %d;", condition.getPortName().getName(), condition.getPortName().getName(), condition.N());
         } else {
-            emitter().emit("return !%s.full();", condition.getPortName().getName());
+            emitter().emit("return !%s.full() && %s_count > %d;", condition.getPortName().getName(), condition.getPortName().getName(), condition.N());
         }
         emitter().decreaseIndentation();
         emitter().emit("}");
         emitter().emit("");
-
     }
 
     // ------------------------------------------------------------------------

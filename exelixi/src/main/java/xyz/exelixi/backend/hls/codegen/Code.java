@@ -9,6 +9,7 @@ import se.lth.cs.tycho.ir.decl.GeneratorVarDecl;
 import se.lth.cs.tycho.ir.decl.VarDecl;
 import se.lth.cs.tycho.ir.entity.PortDecl;
 import se.lth.cs.tycho.ir.entity.am.ActorMachine;
+import se.lth.cs.tycho.ir.entity.am.Scope;
 import se.lth.cs.tycho.ir.entity.am.Transition;
 import se.lth.cs.tycho.ir.expr.*;
 import se.lth.cs.tycho.ir.network.Connection;
@@ -105,11 +106,10 @@ public interface Code {
         Type portType = types().portType(input.getPort());
         String tmp = variables().generateTemp();
         if (input.getOffset() == 0) {
-            emitter().emit("%s = channel_peek_first_%s(self->%s_channel);", lvalue, inputPortTypeSize(input.getPort()), input.getPort().getName());
+            emitter().emit("%s = %s.read();", lvalue, input.getPort().getName());
         } else {
-            emitter().emit("%s;", declaration(portType, tmp));
-            emitter().emit("channel_peek_%s(self->%s_channel, %d, 1, &%s);", inputPortTypeSize(input.getPort()), input.getPort().getName(), input.getOffset(), tmp);
-            emitter().emit("%s = %s;", lvalue, tmp); // should handle some discrepancies between port type and variable type.
+            emitter().emit("// -- Offset is not handeld");
+            emitter().emit("%s = %s.read();", lvalue, input.getPort().getName());
         }
     }
 
@@ -121,15 +121,18 @@ public interface Code {
         assert input.hasRepeat(); // only repeat assignments to lists are supported
         assert input.getPatternLength() == 1; // only with one variable
         assert input.getOffset() == 0; // and that variable is therefore the first
-        Type portType = types().portType(input.getPort());
-        emitter().emit("channel_peek_%s(self->%s_channel, 0, %d, (%s*) &%s);", inputPortTypeSize(input.getPort()), input.getPort().getName(), input.getRepeat(), type(portType), lvalue);
+        emitter().emit("for(int i = 0; i < %d; i++){", input.getRepeat());
+        emitter().increaseIndentation();
+        emitter().emit("%s[i] = %s.read();", lvalue, input.getPort().getName());
+        emitter().decreaseIndentation();
+        emitter().emit("}");
     }
 
     default void assignList(ListType type, String lvalue, ExprVariable var) {
         assert type.getSize().isPresent();
         String tmp = variables().generateTemp();
         String rvalue = evaluate(var);
-        emitter().emit("for (size_t %s=0; %1$s < %d; %1$s++) {", tmp, type.getSize().getAsInt());
+        emitter().emit("for (int %s=0; %1$s < %d; %1$s++) {", tmp, type.getSize().getAsInt());
         emitter().increaseIndentation();
         emitter().emit("%s[%s] = %s[%2$s];", lvalue, tmp, rvalue);
         emitter().decreaseIndentation();
@@ -152,7 +155,7 @@ public interface Code {
         emitter().emit("{");
         emitter().increaseIndentation();
         String index = variables().generateTemp();
-        emitter().emit("size_t %s = 0;", index);
+        emitter().emit("int %s = 0;", index);
         assignListComprehension(type, lvalue, index, list);
         emitter().decreaseIndentation();
         emitter().emit("}");
@@ -219,7 +222,7 @@ public interface Code {
     }
 
     default String declaration(BoolType type, String name) {
-        return "_Bool " + name;
+        return "bool " + name;
     }
 
     default String declaration(StringType type, String name) {
@@ -249,18 +252,17 @@ public interface Code {
         return parameters;
     }
 
-    default List<String> actorMachineIOName(ActorMachine actorMachine) {
+    default List<String> actorMachineIOName(ActorMachine actorMachine, boolean emitInputs) {
         List<String> names = new ArrayList<String>();
 
-        // -- IO
-        List<PortDecl> inputs = actorMachine.getInputPorts();
-        List<PortDecl> outputs = actorMachine.getOutputPorts();
-
-        // -- Treat Inputs
-        for (PortDecl portDecl : inputs) {
-            names.add(portDecl.getName());
+        if (emitInputs) {
+            List<PortDecl> inputs = actorMachine.getInputPorts();
+            // -- Treat Inputs
+            for (PortDecl portDecl : inputs) {
+                names.add(portDecl.getName());
+            }
         }
-
+        List<PortDecl> outputs = actorMachine.getOutputPorts();
         // -- Treat outputs
         for (PortDecl portDecl : outputs) {
             names.add(portDecl.getName());
@@ -269,13 +271,30 @@ public interface Code {
         return names;
     }
 
-    default List<String> transitionIOName(Transition transition) {
+    default List<String> scopeIONames(Scope scope){
         List<String> names = new ArrayList<>();
-
-        for (Port port : transition.getInputRates().keySet()) {
-            names.add(port.getName());
+        for (VarDecl varDecl : scope.getDeclarations()) {
+            if (varDecl.getValue() instanceof ExprInput){
+                ExprInput expr = (ExprInput) varDecl.getValue();
+                Port port = expr.getPort();
+                String portName = port.getName();
+                if(!names.contains(portName)){
+                    names.add(portName);
+                }
+            }
         }
 
+        return names;
+    }
+
+    default List<String> transitionIOName(Transition transition, boolean emitInputs) {
+        List<String> names = new ArrayList<>();
+
+        if (emitInputs) {
+            for (Port port : transition.getInputRates().keySet()) {
+                names.add(port.getName());
+            }
+        }
         for (Port port : transition.getOutputRates().keySet()) {
             names.add(port.getName());
         }
@@ -341,7 +360,7 @@ public interface Code {
     }
 
     default String type(BoolType type) {
-        return "_Bool";
+        return "bool";
     }
 
     String evaluate(Expression expr);
@@ -408,7 +427,7 @@ public interface Code {
             case "and":
             case "&&":
                 String andResult = variables().generateTemp();
-                emitter().emit("_Bool %s;", andResult);
+                emitter().emit("bool %s;", andResult);
                 emitter().emit("if (%s) {", evaluate(left));
                 emitter().increaseIndentation();
                 emitter().emit("%s = %s;", andResult, evaluate(right));
@@ -422,7 +441,7 @@ public interface Code {
             case "||":
             case "or":
                 String orResult = variables().generateTemp();
-                emitter().emit("_Bool %s;", orResult);
+                emitter().emit("bool %s;", orResult);
                 emitter().emit("if (%s) {", evaluate(left));
                 emitter().increaseIndentation();
                 emitter().emit("%s = true;", orResult);
@@ -461,7 +480,7 @@ public interface Code {
         String decl = declaration(t, name);
         emitter().emit("%s;", decl);
         String index = variables().generateTemp();
-        emitter().emit("size_t %s = 0;", index);
+        emitter().emit("int %s = 0;", index);
         evaluateListComprehension(comprehension, name, index);
         return name;
     }
@@ -634,15 +653,6 @@ public interface Code {
     void execute(Statement stmt);
 
     default void execute(StmtConsume consume) {
-        if (consume.getNumberOfTokens() == 1) {
-            emitter().emit("%s.read();", consume.getPort().getName());
-        } else {
-            emitter().emit("for(int i = 0; i <= %d; i++){", consume.getNumberOfTokens());
-            emitter().increaseIndentation();
-            emitter().emit("%s.read();", consume.getPort().getName());
-            emitter().decreaseIndentation();
-            emitter().emit("}");
-        }
     }
 
     default void execute(StmtWrite write) {
@@ -660,7 +670,7 @@ public interface Code {
             String value = evaluate(write.getValues().get(0));
             String repeat = evaluate(write.getRepeatExpression());
             String temp = variables().generateTemp();
-            emitter().emit("for (size_t %1$s = 0; %1$s < %2$s; %1$s++) {", temp, repeat);
+            emitter().emit("for (int %1$s = 0; %1$s < %2$s; %1$s++) {", temp, repeat);
             emitter().increaseIndentation();
             emitter().emit("%s.write(%s[%s]);", portName, value, temp);
             emitter().decreaseIndentation();
