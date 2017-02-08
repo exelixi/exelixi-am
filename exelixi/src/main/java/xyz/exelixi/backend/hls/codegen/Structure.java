@@ -154,8 +154,12 @@ public interface Structure {
                     } else {
                         decl = code().declaration(types().declaredType(var), backend().variables().declarationName(var));
                     }
-                    String value = code().evaluate(var.getValue());
-                    emitter().emit("static %s = %s;", decl, value);
+                    if(var.getValue() != null) {
+                        String value = code().evaluate(var.getValue());
+                        emitter().emit("static %s = %s;", decl, value);
+                    }else{
+                        emitter().emit("static %s;", decl);
+                    }
                 } else {
                     String decl = code().declaration(types().declaredType(var), backend().variables().declarationName(var));
                     emitter().emit("static %s;", decl);
