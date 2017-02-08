@@ -67,12 +67,31 @@ public class HlsBackendPhase implements Phase {
         // -- Get Vivado HLS Backend
         HlsBackendCore core = openBackend(task, context);
 
+        // -- Genrate Globals
+        generateGlobals(core);
+
         // -- Generator Actor Code
         generateActors(core);
 
         return task;
     }
 
+    /**
+     * Generate Globals source code and header files
+     */
+    private void generateGlobals(HlsBackendCore backend){
+        // -- Generate Global header file
+        backend.global().generateHeaderCode(includePath);
+        // -- Generate Global source file
+        backend.global().generateSourceCode(srcPath);
+    }
+
+
+    /**
+     * Generate Actor Machine source code and header files
+     *
+     * @param backend
+     */
     private void generateActors(HlsBackendCore backend) {
         for (Instance instance : backend.task().getNetwork().getInstances()) {
             // -- Generate header code

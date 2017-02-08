@@ -135,6 +135,7 @@ public interface HlsBackendCore {
     @Binding(MODULE)
     Callables callables();
 
-
+    @Binding(MODULE)
+    Global global();
 
 }

@@ -3,6 +3,7 @@ package xyz.exelixi.backend.hls.codegen;
 import org.multij.Binding;
 import org.multij.Module;
 import se.lth.cs.tycho.ir.Generator;
+import se.lth.cs.tycho.ir.IRNode;
 import se.lth.cs.tycho.ir.Port;
 import se.lth.cs.tycho.ir.decl.ClosureVarDecl;
 import se.lth.cs.tycho.ir.decl.GeneratorVarDecl;
@@ -242,11 +243,19 @@ public interface Code {
         // -- Treat Inputs
         for (PortDecl portDecl : inputs) {
             parameters.add(backend().code().type(portDecl));
+            // -- Count
+            String type = "uint32_t";
+            String count = type + " " + portDecl.getName() + "_count";
+            parameters.add(count);
         }
 
         // -- Treat outputs
         for (PortDecl portDecl : outputs) {
             parameters.add(backend().code().type(portDecl));
+            // -- Count
+            String type = "uint32_t";
+            String count = type + " " + portDecl.getName() + "_count";
+            parameters.add(count);
         }
 
         return parameters;
@@ -610,13 +619,12 @@ public interface Code {
     default String evaluate(ExprApplication apply) {
         String fn = evaluate(apply.getFunction());
         List<String> parameters = new ArrayList<>();
-        parameters.add(fn + ".env");
         for (Expression parameter : apply.getArgs()) {
             parameters.add(evaluate(parameter));
         }
         String result = variables().generateTemp();
         String decl = declaration(types().type(apply), result);
-        emitter().emit("%s = %s.f(%s);", decl, fn, String.join(", ", parameters));
+        emitter().emit("%s = %s(%s);", decl, fn, String.join(", ", parameters));
         return result;
     }
 

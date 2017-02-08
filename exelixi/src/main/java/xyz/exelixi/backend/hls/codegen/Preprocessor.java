@@ -32,6 +32,10 @@ public interface Preprocessor {
         emitter().emit("");
     }
 
+    default void defineDeclaration(String name, String value){
+        emitter().emit("#define %s %s", name, value);
+    }
+
     default void endif() {
         emitter().emit("#endif");
     }

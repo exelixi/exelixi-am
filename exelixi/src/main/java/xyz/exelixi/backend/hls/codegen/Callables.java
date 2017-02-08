@@ -46,31 +46,15 @@ public interface Callables {
 	 */
 
     default void declareCallables() {
-        backend().emitter().emit("// FUNCTION AND PROCEDURE FAT POINTER TYPES");
-        declareCallableFatPointerTypes();
         backend().emitter().emit("");
-        backend().emitter().emit("// FUNCTION AND PROCEDURE PROTOTYPES");
         backend().task().walk().forEach(this::callablePrototype);
         backend().emitter().emit("");
-        backend().emitter().emit("// EXTERNAL FUNCTION AND PROCEDURE DECLARATIONS");
-        backend().task().walk().forEach(this::externalCallableDeclaration);
-        backend().emitter().emit("");
+
     }
 
     default void defineCallables() {
-        backend().emitter().emit("// EXTERNAL FUNCTION AND PROCEDURE DEFINITIONS");
-        backend().task().walk().forEach(this::externalCallableDefinition);
-        backend().emitter().emit("");
-        backend().emitter().emit("// FUNCTION AND PROCEDURE DEFINITIONS");
         backend().task().walk().forEach(this::callableDefinition);
         backend().emitter().emit("");
-    }
-
-    // typedef for fat function pointer with environment pointer
-    default void declareCallableFatPointerTypes() {
-        Set<CallableType> visited = new LinkedHashSet<>();
-        backend().task().walk().forEach(node -> collectCallableTypes(node, visited::add));
-        visited.forEach(this::declareCallableFatPointerType);
     }
 
     default void collectCallableTypes(IRNode node, Consumer<CallableType> collector) {
@@ -192,13 +176,13 @@ public interface Callables {
 
     default void callablePrototype(ExprLambda lambda) {
         String name = functionName(lambda);
-        closureTypedef(lambda.getClosure(), name);
+       // closureTypedef(lambda.getClosure(), name);
         backend().emitter().emit("%s;", lambdaHeader(lambda));
     }
 
     default void callablePrototype(ExprProc lambda) {
         String name = functionName(lambda);
-        closureTypedef(lambda.getClosure(), name);
+        //closureTypedef(lambda.getClosure(), name);
         backend().emitter().emit("%s;", procHeader(lambda));
     }
 
@@ -225,10 +209,10 @@ public interface Callables {
         backend().emitter().emit("%s {", lambdaHeader(lambda));
         backend().emitter().increaseIndentation();
         lambda.forEachChild(this::declareEnvironmentForCallablesInScope);
-        backend().emitter().emit("envt_%s *env = (envt_%s*) e;", name, name);
         backend().emitter().emit("return %s;", backend().code().evaluate(lambda.getBody()));
         backend().emitter().decreaseIndentation();
         backend().emitter().emit("}");
+        backend().emitter().emit("");
     }
 
     default void callableDefinition(ExprProc proc) {
@@ -240,6 +224,7 @@ public interface Callables {
         proc.getBody().forEach(backend().code()::execute);
         backend().emitter().decreaseIndentation();
         backend().emitter().emit("}");
+        backend().emitter().emit("");
     }
 
     default String envField(VarDecl decl) {
@@ -288,6 +273,7 @@ public interface Callables {
             usedNames().add(candidate);
             callablesNames().put(callable, candidate);
         }
+
         return callablesNames().get(callable);
     }
 
@@ -354,7 +340,7 @@ public interface Callables {
             }
             backend().emitter().emit("%s;", callableHeader(varDecl.getOriginalName(), callable, parameterNames, false));
             String name = externalWrapperFunctionName(varDecl);
-            backend().emitter().emit("%s;", callableHeader(name, callable, parameterNames, true));
+            backend().emitter().emit("%s;", callableHeader(name, callable, parameterNames, false));
         }
     }
 
@@ -371,7 +357,7 @@ public interface Callables {
                 parameterNames.add("p_" + i);
             }
             String name = externalWrapperFunctionName(varDecl);
-            backend().emitter().emit("%s {", callableHeader(name, callable, parameterNames, true));
+            backend().emitter().emit("%s {", callableHeader(name, callable, parameterNames, false));
             backend().emitter().increaseIndentation();
             String call = varDecl.getOriginalName() + "(" + String.join(", ", parameterNames) + ")";
             if (callable.getReturnType().equals(UnitType.INSTANCE)) {
@@ -388,14 +374,14 @@ public interface Callables {
         String name = functionName(lambda);
         LambdaType type = (LambdaType) backend().types().type(lambda);
         ImmutableList<String> parameterNames = lambda.getValueParameters().map(backend().variables()::declarationName);
-        return callableHeader(name, type, parameterNames, true);
+        return callableHeader(name, type, parameterNames, false);
     }
 
     default String procHeader(ExprProc proc) {
         String name = functionName(proc);
         ProcType type = (ProcType) backend().types().type(proc);
         ImmutableList<String> parameterNames = proc.getValueParameters().map(backend().variables()::declarationName);
-        return callableHeader(name, type, parameterNames, true);
+        return callableHeader(name, type, parameterNames, false);
     }
 
     default String callableHeader(String name, CallableType type, List<String> parameterNames, boolean withEnv) {

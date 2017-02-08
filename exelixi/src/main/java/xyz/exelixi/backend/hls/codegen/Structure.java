@@ -156,7 +156,11 @@ public interface Structure {
                     }
                     if(var.getValue() != null) {
                         String value = code().evaluate(var.getValue());
-                        emitter().emit("static %s = %s;", decl, value);
+                        if(var.isConstant()){
+                            backend().preprocessor().defineDeclaration(backend().variables().declarationName(var), value);
+                        }else {
+                            emitter().emit("static %s = %s;", decl, value);
+                        }
                     }else{
                         emitter().emit("static %s;", decl);
                     }
@@ -169,7 +173,6 @@ public interface Structure {
             i++;
         }
 
-        emitter().emit("");
         emitter().emit("// -- Actor Machine Program Counter");
         emitter().emit("static int program_counter = 0;");
         emitter().emit("");
@@ -281,6 +284,7 @@ public interface Structure {
             parameters.sort(new PortOrderComparator(actoMachineIO));
 
             emitter().emit("static void %s_transition_%d(%s) {", name, i, String.join(", ", parameters));
+            backend().preprocessor().pragma("HLS INLINE");
             emitter().increaseIndentation();
             transition.getBody().forEach(backend().code()::execute);
             emitter().decreaseIndentation();
@@ -325,6 +329,7 @@ public interface Structure {
         if (condition.isInputCondition()) {
             emitter().emit("return !%s.empty() && %s_count > %d;", condition.getPortName().getName(), condition.getPortName().getName(), condition.N());
         } else {
+            // FIXME : Add FIFO SIZE
             emitter().emit("return !%s.full() && %s_count > %d;", condition.getPortName().getName(), condition.getPortName().getName(), condition.N());
         }
         emitter().decreaseIndentation();

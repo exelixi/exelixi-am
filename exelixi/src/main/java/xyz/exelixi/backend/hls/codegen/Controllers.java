@@ -141,12 +141,14 @@ public interface Controllers {
 
     default void emitInstruction(String name, Test test, Map<State, Integer> stateNumbers, ActorMachine actorMachine) {
         Condition condition = actorMachine.getCondition(test.condition());
-        String argument = "";
+        List<String> argument = new ArrayList<String>();
         if (condition instanceof PortCondition) {
             PortCondition portCondition = (PortCondition) condition;
-            argument = portCondition.getPortName().getName();
+            argument.add(portCondition.getPortName().getName());
+            String count = portCondition.getPortName().getName() + "_count";
+            argument.add(count);
         }
-        emitter().emit("if (%s_condition_%d(%s)) {", name, test.condition(), argument);
+        emitter().emit("if (%s_condition_%d(%s)) {", name, test.condition(), String.join(", ",argument));
         emitter().increaseIndentation();
         emitter().emit("goto S%d;", stateNumbers.get(test.targetTrue()));
         emitter().decreaseIndentation();

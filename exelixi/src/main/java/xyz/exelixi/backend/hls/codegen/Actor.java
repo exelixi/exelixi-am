@@ -85,7 +85,7 @@ public interface Actor {
         // -- Includes
         preprocessor().systemInclude("hls_stream.h");
         preprocessor().systemInclude("stdint.h");
-        preprocessor().userInclude(fileNameBase + ".h");
+        preprocessor().userInclude("global.h");
         emitter().emit("");
 
         // -- Actor Structure Declaration
