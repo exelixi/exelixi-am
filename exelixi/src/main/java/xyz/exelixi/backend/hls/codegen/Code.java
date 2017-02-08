@@ -287,6 +287,21 @@ public interface Code {
         return names;
     }
 
+    default List<String> scopeIOArguments(Scope scope){
+        List<String> arguments = new ArrayList<>();
+        for (VarDecl varDecl : scope.getDeclarations()) {
+            if (varDecl.getValue() instanceof ExprInput){
+                ExprInput expr = (ExprInput) varDecl.getValue();
+                Port port = expr.getPort();
+                arguments.add(type(port));
+            }
+        }
+
+        return arguments;
+    }
+
+
+
     default List<String> transitionIOName(Transition transition, boolean emitInputs) {
         List<String> names = new ArrayList<>();
 

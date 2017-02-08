@@ -184,7 +184,7 @@ public interface Structure {
         int i = 0;
         for (Scope scope : actorMachine.getScopes()) {
             if (!scope.isPersistent()) {
-                emitter().emit("static void %s_init_scope_%d() {", name, i, name);
+                emitter().emit("static void %s_init_scope_%d(%s) {", name, i, String.join(", ", code().scopeIOArguments(scope)));
                 emitter().increaseIndentation();
                 for (VarDecl var : scope.getDeclarations()) {
                     Type type = types().declaredType(var);
