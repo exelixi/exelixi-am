@@ -556,17 +556,15 @@ public interface Code {
     default String evaluate(ExprList list) {
         ListType t = (ListType) types().type(list);
         if (t.getSize().isPresent()) {
-            String name = variables().generateTemp();
-            String decl = declaration(t, name);
             String value = list.getElements().stream().sequential()
                     .map(this::evaluate)
                     .collect(Collectors.joining(", ", "{", "}"));
-            emitter().emit("%s = %s;", decl, value);
-            return name;
+            return value;
         } else {
             return "NULL /* TODO: implement dynamically sized lists */";
         }
     }
+
 
     void forEach(Expression collection, List<GeneratorVarDecl> varDecls, Runnable action);
 

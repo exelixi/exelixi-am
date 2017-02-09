@@ -44,6 +44,7 @@ import se.lth.cs.tycho.phases.attributes.Names;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.types.CallableType;
+import se.lth.cs.tycho.types.ListType;
 import se.lth.cs.tycho.types.Type;
 import xyz.exelixi.backend.hls.HlsBackendCore;
 import xyz.exelixi.utils.PortOrderComparator;
@@ -157,7 +158,12 @@ public interface Structure {
                     if(var.getValue() != null) {
                         String value = code().evaluate(var.getValue());
                         if(var.isConstant()){
-                            backend().preprocessor().defineDeclaration(backend().variables().declarationName(var), value);
+                            Type type = types().declaredType(var);
+                            if(type instanceof ListType){
+                                emitter().emit("static %s = %s;", decl, value);
+                            }else {
+                                backend().preprocessor().defineDeclaration(backend().variables().declarationName(var), value);
+                            }
                         }else {
                             emitter().emit("static %s = %s;", decl, value);
                         }

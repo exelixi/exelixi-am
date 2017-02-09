@@ -37,9 +37,11 @@ import org.multij.Binding;
 import org.multij.Module;
 import se.lth.cs.tycho.ir.decl.GlobalVarDecl;
 import se.lth.cs.tycho.ir.decl.VarDecl;
+import se.lth.cs.tycho.ir.expr.ExprList;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.types.CallableType;
+import se.lth.cs.tycho.types.ListType;
 import se.lth.cs.tycho.types.Type;
 import xyz.exelixi.backend.hls.HlsBackendCore;
 
@@ -125,7 +127,7 @@ public interface Global {
         backend().callables().declareCallables();
         emitter().emit("");
 
-       // globalVariableDeclarations(getGlobalVarDecls());
+        // globalVariableDeclarations(getGlobalVarDecls());
 
         // -- ENDIF
         preprocessor().endif();
@@ -159,7 +161,13 @@ public interface Global {
                 // -- Not Supported
             } else {
                 if (decl.isConstant() && !(type instanceof CallableType)) {
-                    preprocessor().defineDeclaration(backend().variables().declarationName(decl), code().evaluate(decl.getValue()));
+                    if (type instanceof ListType) {
+                        ListType t = (ListType) type;
+                        String declaration = code().declaration(t, backend().variables().declarationName(decl));
+                        emitter().emit("%s = %s",declaration,  code().evaluate(decl.getValue()));
+                    } else {
+                        preprocessor().defineDeclaration(backend().variables().declarationName(decl), code().evaluate(decl.getValue()));
+                    }
                 }
             }
         }
