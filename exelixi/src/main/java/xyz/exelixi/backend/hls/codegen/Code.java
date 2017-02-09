@@ -280,14 +280,14 @@ public interface Code {
         return names;
     }
 
-    default List<String> scopeIONames(Scope scope){
+    default List<String> scopeIONames(Scope scope) {
         List<String> names = new ArrayList<>();
         for (VarDecl varDecl : scope.getDeclarations()) {
-            if (varDecl.getValue() instanceof ExprInput){
+            if (varDecl.getValue() instanceof ExprInput) {
                 ExprInput expr = (ExprInput) varDecl.getValue();
                 Port port = expr.getPort();
                 String portName = port.getName();
-                if(!names.contains(portName)){
+                if (!names.contains(portName)) {
                     names.add(portName);
                 }
             }
@@ -296,10 +296,10 @@ public interface Code {
         return names;
     }
 
-    default List<String> scopeIOArguments(Scope scope){
+    default List<String> scopeIOArguments(Scope scope) {
         List<String> arguments = new ArrayList<>();
         for (VarDecl varDecl : scope.getDeclarations()) {
-            if (varDecl.getValue() instanceof ExprInput){
+            if (varDecl.getValue() instanceof ExprInput) {
                 ExprInput expr = (ExprInput) varDecl.getValue();
                 Port port = expr.getPort();
                 arguments.add(type(port));
@@ -308,7 +308,6 @@ public interface Code {
 
         return arguments;
     }
-
 
 
     default List<String> transitionIOName(Transition transition, boolean emitInputs) {
@@ -731,10 +730,12 @@ public interface Code {
         stmt.getThenBranch().forEach(this::execute);
         emitter().decreaseIndentation();
         if (stmt.getElseBranch() != null) {
-            emitter().emit("} else {");
-            emitter().increaseIndentation();
-            stmt.getElseBranch().forEach(this::execute);
-            emitter().decreaseIndentation();
+            if (stmt.getElseBranch().size() != 0) {
+                emitter().emit("} else {");
+                emitter().increaseIndentation();
+                stmt.getElseBranch().forEach(this::execute);
+                emitter().decreaseIndentation();
+            }
         }
         emitter().emit("}");
     }
