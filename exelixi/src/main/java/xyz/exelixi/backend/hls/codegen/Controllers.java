@@ -172,7 +172,8 @@ public interface Controllers {
         List<String> actorMachineIO = backend().code().actorMachineIOName(actorMachine, false);
         arguments.sort(new PortOrderComparator(actorMachineIO));
         emitter().emit("%s_transition_%d(%s);", name, exec.transition(), String.join(", ", arguments));
-        emitter().emit("goto S%d;", stateNumbers.get(exec.target()));
+        emitter().emit("program_counter = %d;", stateNumbers.get(exec.target()));
+        emitter().emit("return;");
         emitter().emit("");
     }
 
@@ -188,7 +189,7 @@ public interface Controllers {
         Set<State> targets = new HashSet<>();
         for (State state : stateList) {
             Instruction i = state.getInstructions().get(0);
-            if (i.getKind() == InstructionKind.WAIT) {
+            if (i.getKind() == InstructionKind.WAIT || i.getKind() == InstructionKind.EXEC) {
                 i.forEachTarget(targets::add);
             }
         }
