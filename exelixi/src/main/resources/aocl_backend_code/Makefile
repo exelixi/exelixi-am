@@ -6,8 +6,9 @@
 # initialize the enviroment.....: source /opt/intelFPGA/16.1/hld/init_opencl.sh
 # run the host on emulation mode: CL_CONTEXT_EMULATOR_DEVICE_ALTERA=1 bin/host
 
+#DEBUG=1
 ifeq ($(VERBOSE),1)
-ECHO := 
+ECHO :=
 else
 ECHO := @
 endif
@@ -20,10 +21,6 @@ ifeq ($(wildcard $(ALTERAOCLSDKROOT)/host/include/CL/opencl.h),)
 $(error Set ALTERAOCLSDKROOT to the root directory of the Intel(R) FPGA SDK for OpenCL(TM) software installation.)
 endif
 
-# OpenCL compile and link flags.
-AOCL_COMPILE_CONFIG := $(shell aocl compile-config )
-AOCL_LINK_CONFIG := $(shell aocl link-config )
-
 # Compilation flags
 ifeq ($(DEBUG),1)
 CXXFLAGS += -g
@@ -34,35 +31,61 @@ endif
 # Compiler
 CXX := g++
 
-# Target
-TARGET := host
-TARGET_DIR := bin
-
 # Directories
 INC_DIRS := host/include
-LIB_DIRS := 
+LIB_DIRS :=
 
 # Files
 INCS := $(wildcard )
 SRCS := $(wildcard host/src/*.cpp)
-LIBS := rt pthread
 
-# Make it all!
-all : $(TARGET_DIR)/$(TARGET)
 
-# Host executable target.
-$(TARGET_DIR)/$(TARGET) : Makefile $(SRCS) $(INCS) $(TARGET_DIR)
+
+# EMU
+EMU_AOCL_COMPILE_CONFIG := $(shell aocl compile-config )
+EMU_AOCL_LINK_CONFIG := $(shell aocl link-config )
+EMU_LIBS := rt pthread
+EMU_TARGET := host
+EMU_TARGET_DIR := bin/emu
+
+
+# arm cross compiler
+CROSS-COMPILE = arm-linux-gnueabihf-
+ARM_AOCL_COMPILE_CONFIG=$(shell aocl compile-config --arm) -Ihost/include
+ARM_AOCL_LINK_CONFIG=$(shell aocl link-config --arm)  -lacl_emulator_kernel_rt
+ARM_TARGET     := host
+ARM_TARGET_DIR := bin/arm
+
+# Make it all: use the emulator by default
+all : $(EMU_TARGET_DIR)/$(EMU_TARGET)
+
+# make emu
+emu : $(EMU_TARGET_DIR)/$(EMU_TARGET)
+
+$(EMU_TARGET_DIR)/$(EMU_TARGET) : Makefile $(SRCS) $(INCS) $(EMU_TARGET_DIR)
 	$(ECHO)$(CXX) $(CPPFLAGS) $(CXXFLAGS) -fPIC $(foreach D,$(INC_DIRS),-I$D) \
-			$(AOCL_COMPILE_CONFIG) $(SRCS) $(AOCL_LINK_CONFIG) \
+			$(EMU_AOCL_COMPILE_CONFIG) $(SRCS) $(EMU_AOCL_LINK_CONFIG) \
 			$(foreach D,$(LIB_DIRS),-L$D) \
-			$(foreach L,$(LIBS),-l$L) \
-			-o $(TARGET_DIR)/$(TARGET)
+			$(foreach L,$(EMU_LIBS),-l$L) \
+			-o $(EMU_TARGET_DIR)/$(EMU_TARGET)
 
-$(TARGET_DIR) :
-	$(ECHO)mkdir $(TARGET_DIR)
-	
-# Standard make targets
+$(EMU_TARGET_DIR) :
+	$(ECHO)mkdir $(EMU_TARGET_DIR)
+
+$(ARM_TARGET_DIR) :
+	$(ECHO)mkdir $(ARM_TARGET_DIR)
+
+# make clean
 clean :
-	$(ECHO)rm -f $(TARGET_DIR)/$(TARGET)
+	$(ECHO)rm -f $(EMU_TARGET_DIR)/$(EMU_TARGET)
+	$(ECHO)rm -f $(ARM_TARGET_DIR)/$(ARM_TARGET)
 
-.PHONY : all clean
+# make arm
+arm : $(ARM_TARGET_DIR)/$(ARM_TARGET)
+
+$(ARM_TARGET_DIR)/$(ARM_TARGET) : Makefile $(SRCS) $(INCS) $(ARM_TARGET_DIR)
+	$(ECHO)$(CROSS-COMPILE)$(CXX) $(CXXFLAGS) -std=c++11 -lpthread -fpermissive $(SRCS) $(COMMON_FILES) \
+		-o $(ARM_TARGET_DIR)/$(ARM_TARGET)  \
+		   $(ARM_AOCL_COMPILE_CONFIG) $(ARM_AOCL_LINK_CONFIG)
+
+.PHONY : all emu arm clean

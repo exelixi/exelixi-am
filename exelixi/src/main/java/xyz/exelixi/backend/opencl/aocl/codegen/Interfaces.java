@@ -108,7 +108,7 @@ public interface Interfaces {
         emitter().increaseIndentation();
         emitter().emit("while(read_pipe(FIFO_%d, &value)>=0) {", fifoId);
         emitter().increaseIndentation();
-        emitter().emit("out[tmp_write + count] = value;");
+        emitter().emit("out[(tmp_write + count) %% FIFO_DEPTH] = value;");
         emitter().emit("rooms--;");
         emitter().emit("count++;");
         emitter().emit("if(rooms == 0) break;");

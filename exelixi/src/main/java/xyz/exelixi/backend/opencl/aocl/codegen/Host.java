@@ -143,7 +143,6 @@ public interface Host {
         emitter().emit("#include <chrono>");
         emitter().emit("");
         // constants
-        emitter().emit("#define PLATFORM_NAME \"Intel(R) FPGA\"");
         emitter().emit("#define BINARY_NAME \"device.aocx\"");
         emitter().emit("#define QUEUES_SIZE %d", kernelsIds.keySet().size());
         emitter().emit("#define PIPES_SIZE 512");
@@ -172,7 +171,7 @@ public interface Host {
         emitter().emit("using TimePoint = std::chrono::time_point<Clock, Duration>;");
         emitter().emit("");
 
-        for(Connection connection : helper().getBorders()){
+        for (Connection connection : helper().getBorders()) {
             int fifoId = helper().getConnectionId(connection);
             emitter().emit("int *interface_%d_buffer;", fifoId); //TODO add TYPE
             emitter().emit("int *interface_%d_read;", fifoId);
@@ -245,8 +244,8 @@ public interface Host {
             emitter().emit("}");
 
             emitter().emit("return NULL;");
-        emitter().decreaseIndentation();
-        emitter().emit("}");
+            emitter().decreaseIndentation();
+            emitter().emit("}");
         }
         emitter().emit("");
 
@@ -262,11 +261,9 @@ public interface Host {
 
             emitter().emit("Clock::time_point _start = Clock::now();");
             emitter().emit("bool stop = false;");
-            emitter().emit("long count = 0;");
 
             emitter().emit("while (!stop) {");
             emitter().increaseIndentation();
-            emitter().emit("count++;");
             emitter().emit("cl_int status = clEnqueueTask(queues[QUEUE_INTERFACE_%d], kernel_interface_%d, 0, NULL, NULL);", fifoId, fifoId);
             emitter().emit("test_error(status, \"ERROR: Failed to launch  interface fifo %d.\\n\", &cleanup);", fifoId);
             emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", fifoId);
@@ -274,7 +271,7 @@ public interface Host {
             emitter().emit("int count = (PIPES_SIZE + *interface_%d_write - *interface_%d_read ) %% PIPES_SIZE;", fifoId, fifoId);
             emitter().emit("if(count){");
             emitter().increaseIndentation();
-                    // consume values
+            // consume values
             emitter().emit("//for(int i = 0; i < count; i++){");
             emitter().emit("//    printf(\"%%d \", interface_%d_buffer[(*interface_%d_read + i) %% PIPES_SIZE]);", fifoId, fifoId);
             emitter().emit("//}");
@@ -304,10 +301,18 @@ public interface Host {
         emitter().emit("set_cwd_to_execdir();");
         emitter().emit("");
 
-        emitter().emit("// find the platform defined by the PLATFORM_NAME variable");
-        emitter().emit("cl_platform_id platform = find_platform(PLATFORM_NAME, &status);");
-        emitter().emit("test_error(status, \"ERROR: Unable to find the OpenCL platform.\\n\", &cleanup);");
-        emitter().emit("");
+        emitter().emit("cl_uint num_platforms;");
+        emitter().emit("cl_platform_id* platforms = get_platforms(&num_platforms, &status);");
+        emitter().emit("test_error(status, \"ERROR: Unable to find any platform.\\n\", &cleanup);");
+        emitter().emit("if (!num_platforms) {");
+        emitter().increaseIndentation();
+        emitter().emit("printf(\"No platforms found....\\n\");");
+        emitter().emit("return 1;");
+        emitter().decreaseIndentation();
+        emitter().emit("}");
+
+        emitter().emit("cl_platform_id platform = platforms[0];");
+        emitter().emit("printf(\"Using platform %s\\n\", get_platform_name(platform));");
 
         emitter().emit("// get all the available devives");
         emitter().emit("cl_uint num_devices;");

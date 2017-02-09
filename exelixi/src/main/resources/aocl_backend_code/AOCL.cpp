@@ -85,7 +85,7 @@ static void device_info_bool(cl_device_id device, cl_device_info param, const ch
 }
 
 static void device_info_string(cl_device_id device, cl_device_info param, const char* name) {
-	cl_ulong infoSize;
+	size_t infoSize;
 	clGetDeviceInfo(device, param, 0, NULL, &infoSize);
 	char* a = (char*) malloc(infoSize);
 	clGetDeviceInfo(device, param, infoSize, a, NULL);
@@ -189,7 +189,7 @@ void clinfo() {
 }
 
 char* get_platform_info(cl_platform_id platform, cl_platform_info param_name) {
-	cl_ulong infoSize;
+	size_t infoSize;
 	clGetPlatformInfo(platform, param_name, 0, NULL, &infoSize);
 	char* a = (char*) malloc(infoSize);
 	clGetPlatformInfo(platform, param_name, infoSize, a, NULL);
@@ -641,4 +641,3 @@ void test_error(cl_int status, const char *error_message, void (*clean_function)
 		exit(status);
 	}
 }
-
