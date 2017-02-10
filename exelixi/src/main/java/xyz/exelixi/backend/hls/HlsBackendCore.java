@@ -138,4 +138,7 @@ public interface HlsBackendCore {
     @Binding(MODULE)
     Global global();
 
+    @Binding(MODULE)
+    TclHlsProject tclHlsProject();
+
 }

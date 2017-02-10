@@ -48,37 +48,37 @@ public class XilinxDevices {
 
     public XilinxDevices(String name) {
         this.name = name;
-        if (name.equals("AC701 - Artix 7")) {
+        if (name.equals("AC701")) {
             board = "xilinx.com:ac701:part0:1.2";
             fpga = "xc7a200tfbg676-2";
-        } else if (name.equals("KC705 - Kintex 7")) {
+        } else if (name.equals("KC705")) {
             board = "xilinx.com:kc705:part0:1.2";
             fpga = "xc7k325tffg900-2";
-        } else if (name.equals("KCU105 - Kintex Ultrscale")) {
+        } else if (name.equals("KCU105")) {
             board = "xilinx.com:kcu105:part0:1.1";
             fpga = "xcku040-ffva1156-2-e";
-        } else if (name.equals("VC707 - Virtex 7")) {
+        } else if (name.equals("VC707")) {
             board = "xilinx.com:vc707:part0:1.2";
             fpga = "xc7vx485tffg1761-2";
-        } else if (name.equals("VC709 - Virtex 7")) {
+        } else if (name.equals("VC709")) {
             board = "xilinx.com:vc709:part0:1.7";
             fpga = "xc7vx690tffg1761-2";
-        } else if (name.equals("VCU 108 - Virtex Ultrascale")) {
+        } else if (name.equals("VCU 108")) {
             board = "xilinx.com:vc709:part0:1.7";
             fpga = "xc7vx690tffg1761-2";
-        } else if (name.equals("ZC702 - Zynq 7")) {
+        } else if (name.equals("ZC702")) {
             board = "xilinx.com:zc702:part0:1.2";
             fpga = "xc7z020clg484-1";
-        } else if (name.equals("ZC706 - Zynq 7")) {
+        } else if (name.equals("ZC706")) {
             board = "xilinx.com:zc706:part0:1.2";
             fpga = "xc7z045ffg900-2";
-        } else if (name.equals("Zedboard - Zynq 7")) {
+        } else if (name.equals("Zedboard")) {
             board = "em.avnet.com:zed:part0:1.3 ";
             fpga = "xc7z020clg484-1";
-        } else if (name.equals("OZ745 - Zynq 7")) {
+        } else if (name.equals("OZ745")) {
             board = "";
             fpga = "xc7z045ffg900-3";
-        } else if (name.equals("ZCU102 - Zynq Ultrascale+ MPSoC ES1")) {
+        } else if (name.equals("ZCU102")) {
             board = "xilinx.com:zcu102:part0:1.1";
             fpga = "xczu9eg-ffvb1156-1-i-es1";
         }
@@ -98,15 +98,15 @@ public class XilinxDevices {
     }
 
     public boolean isZynq() {
-        if (name.equals("ZC702 - Zynq 7")) {
+        if (name.equals("ZC7027")) {
             return true;
-        } else if (name.equals("ZC706 - Zynq 7")) {
+        } else if (name.equals("ZC706")) {
             return true;
-        } else if (name.equals("Zedboard - Zynq 7")) {
+        } else if (name.equals("Zedboard")) {
             return true;
-        } else if (name.equals("OZ745 - Zynq 7")) {
+        } else if (name.equals("OZ745")) {
             return true;
-        } else if (name.equals("ZCU102 - Zynq Ultrascale+ MPSoC ES1")) {
+        } else if (name.equals("ZCU102")) {
             return true;
         } else {
             return false;
@@ -114,19 +114,19 @@ public class XilinxDevices {
     }
 
     public boolean isZynqUltrascale() {
-        return name.equals("ZCU102 - Zynq Ultrascale+ MPSoC ES1");
+        return name.equals("ZCU102");
     }
 
     public int getDDRLength() {
-        if (name.equals("ZC702 - Zynq 7")) {
+        if (name.equals("ZC702")) {
             return 0x3FF00000;
-        } else if (name.equals("ZC706 - Zynq 7")) {
+        } else if (name.equals("ZC706")) {
             return 0x3FF00000;
-        } else if (name.equals("Zedboard - Zynq 7")) {
+        } else if (name.equals("Zedboard")) {
             return 0x1FF00000;
-        } else if (name.equals("OZ745 - Zynq 7")) {
+        } else if (name.equals("OZ745")) {
             return 0x3FF00000;
-        } else if (name.equals("ZCU102 - Zynq Ultrascale+ MPSoC ES1")) {
+        } else if (name.equals("ZCU102")) {
             return 0x3FF00000;
         }
         return 0;

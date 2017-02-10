@@ -55,7 +55,7 @@ public interface FileNotice {
         generateNotice("/", message);
     }
 
-    default void generateTCLNotice(String message) {
+    default void generateTclNotice(String message) {
         generateNotice("#", message);
     }
 

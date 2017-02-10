@@ -5,12 +5,19 @@ import se.lth.cs.tycho.comp.CompilationTask;
 import se.lth.cs.tycho.comp.Context;
 import se.lth.cs.tycho.ir.network.Instance;
 import se.lth.cs.tycho.phases.Phase;
+import se.lth.cs.tycho.settings.Configuration;
+import se.lth.cs.tycho.settings.OnOffSetting;
+import se.lth.cs.tycho.settings.Setting;
+import se.lth.cs.tycho.settings.StringSetting;
 import xyz.exelixi.Settings;
+import xyz.exelixi.backend.BackendsRegister;
 import xyz.exelixi.backend.hls.HlsBackendCore;
 import xyz.exelixi.utils.Utils;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Vivado HLS Backend Phase
@@ -73,13 +80,15 @@ public class HlsBackendPhase implements Phase {
         // -- Generator Actor Code
         generateActors(core);
 
+        // -- Generate Vivado HLS Projects
+        generateTclProjects(core);
         return task;
     }
 
     /**
      * Generate Globals source code and header files
      */
-    private void generateGlobals(HlsBackendCore backend){
+    private void generateGlobals(HlsBackendCore backend) {
         // -- Generate Global header file
         backend.global().generateHeaderCode(includePath);
         // -- Generate Global source file
@@ -100,6 +109,18 @@ public class HlsBackendPhase implements Phase {
             backend.actor().generateSourceCode(instance, srcPath);
         }
     }
+
+    /**
+     * Generate Vivado HLS TCL projects for the design
+     *
+     * @param backend
+     */
+    private void generateTclProjects(HlsBackendCore backend) {
+        for (Instance instance : backend.task().getNetwork().getInstances()) {
+            backend.tclHlsProject().generateTclProject(instance, projectsPath);
+        }
+    }
+
 
     /**
      * Create Vivado HLS Backend directories
@@ -138,4 +159,28 @@ public class HlsBackendPhase implements Phase {
                 .instance();
     }
 
+    /**
+     * Board Setting
+     */
+    public static final Setting<String> fpgaBoard = new StringSetting() {
+        @Override
+        public String getKey() {
+            return "Xilinx Board";
+        }
+
+        @Override
+        public String getDescription() {
+            return "Choose a Xilinx Board";
+        }
+
+        @Override
+        public String defaultValue(Configuration configuration) {
+            return "ZC702";
+        }
+    };
+
+    @Override
+    public List<Setting<?>> getPhaseSettings() {
+        return Collections.singletonList(fpgaBoard);
+    }
 }
