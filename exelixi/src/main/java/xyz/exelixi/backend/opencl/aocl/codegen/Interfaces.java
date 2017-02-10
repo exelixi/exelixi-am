@@ -9,7 +9,7 @@ import org.multij.Module;
 import se.lth.cs.tycho.ir.network.Connection;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
-import xyz.exelixi.utils.ModelHelper;
+import xyz.exelixi.utils.Resolver;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -23,8 +23,8 @@ public interface Interfaces {
     @Binding(MODULE)
     AoclBackendCore backend();
 
-    default ModelHelper helper() {
-        return backend().helper().get();
+    default Resolver resolver() {
+        return backend().resolver().get();
     }
 
     default Emitter emitter() {
@@ -32,7 +32,7 @@ public interface Interfaces {
     }
 
     default void generateInputInterface(Connection connection, Path path) {
-        int fifoId = helper().getConnectionId(connection);
+        int fifoId = resolver().getConnectionId(connection);
 
         // kernel name
         String name = "interface_" + fifoId;
@@ -77,7 +77,7 @@ public interface Interfaces {
     }
 
     default void generateOutputInterface(Connection connection, Path path) {
-        int fifoId = helper().getConnectionId(connection);
+        int fifoId = resolver().getConnectionId(connection);
 
         // kernel name
         String name = "interface_" + fifoId;

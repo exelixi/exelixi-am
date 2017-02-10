@@ -2,7 +2,6 @@ package xyz.exelixi.backend.opencl.aocl.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
-import se.lth.cs.tycho.decoration.PortDeclarations;
 import se.lth.cs.tycho.ir.Generator;
 import se.lth.cs.tycho.ir.Port;
 import se.lth.cs.tycho.ir.decl.ClosureVarDecl;
@@ -22,9 +21,7 @@ import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.types.*;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
-import xyz.exelixi.utils.ModelHelper;
-import xyz.exelixi.utils.Pair;
-import xyz.exelixi.utils.PortOrderComparator;
+import xyz.exelixi.utils.Resolver;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -36,8 +33,8 @@ public interface Code {
     @Binding(MODULE)
     AoclBackendCore backend();
 
-    default ModelHelper helper() {
-        return backend().helper().get();
+    default Resolver resolver() {
+        return backend().resolver().get();
     }
 
     default Emitter emitter() {
@@ -220,7 +217,7 @@ public interface Code {
     String type(Type type);
 
     default String inputPortDeclaration(PortDecl portDecl, Connection connection) {
-        int id = helper().getConnectionId(connection);
+        int id = resolver().getConnectionId(connection);
 
         String type = type(types().declaredPortType(portDecl));
         String portName = portDecl.getName();
@@ -229,7 +226,7 @@ public interface Code {
     }
 
     default String outputPortDeclaration(PortDecl portDecl, Connection connection) {
-        int id = helper().getConnectionId(connection);
+        int id = resolver().getConnectionId(connection);
         String type = type(types().declaredPortType(portDecl));
         String attributes = "__attribute__((blocking))";
         return "write_only" + " pipe " + type + " " + attributes + " " + "FIFO_" + id;
@@ -574,8 +571,8 @@ public interface Code {
 
     default void execute(StmtRead read) {
         String portName = read.getPort().getName();
-        Connection connection = helper().getIncoming(backend().instance().get().getInstanceName(), portName);
-        int id = helper().getConnectionId(connection);
+        Connection connection = resolver().getIncoming(backend().instance().get().getInstanceName(), portName);
+        int id = resolver().getConnectionId(connection);
         String fifoName = "FIFO_" + id;
 
         if (read.getRepeatExpression() == null) {
@@ -600,11 +597,11 @@ public interface Code {
 
     default void execute(StmtWrite write) {
         String portName = write.getPort().getName();
-        // create list of fifos to be written
+        // of list of fifos to be written
         List<String> fifoNames = new ArrayList<>();
-        List<Connection> connections = helper().getOutgoings(backend().instance().get().getInstanceName(), portName);
+        List<Connection> connections = resolver().getOutgoings(backend().instance().get().getInstanceName(), portName);
         connections.forEach(connection -> {
-            int id = helper().getConnectionId(connection);
+            int id = resolver().getConnectionId(connection);
             fifoNames.add("FIFO_" + id);
         });
 

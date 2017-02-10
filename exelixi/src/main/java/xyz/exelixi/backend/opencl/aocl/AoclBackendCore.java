@@ -11,7 +11,7 @@ import se.lth.cs.tycho.phases.attributes.*;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.phases.cbackend.util.Box;
 import xyz.exelixi.backend.opencl.aocl.codegen.*;
-import xyz.exelixi.utils.ModelHelper;
+import xyz.exelixi.utils.Resolver;
 
 import static org.multij.BindingKind.INJECTED;
 import static org.multij.BindingKind.LAZY;
@@ -31,9 +31,7 @@ public interface AoclBackendCore {
     Context context();
 
     @Binding(LAZY)
-    default Box<ModelHelper> helper(){
-        return Box.empty();
-    }
+    default Box<Resolver> resolver(){ return Box.empty(); }
 
     @Binding(LAZY)
     default Box<Instance> instance() {
