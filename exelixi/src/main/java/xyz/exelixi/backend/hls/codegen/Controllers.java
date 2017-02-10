@@ -95,6 +95,10 @@ public interface Controllers {
         emitter().emit("// -- Controller");
         emitter().emit("");
         emitter().emit(emitControllerPrototype(name, actorMachine) + "{");
+        List<String> portPragmas = backend().code().actorMachineIOName(actorMachine,true);
+        for(String port : portPragmas ){
+            backend().preprocessor().pragma("INTERFACE axis port="+port);
+        }
         List<? extends State> stateList = actorMachine.controller().getStateList();
         Map<State, Integer> stateMap = stateMap(stateList);
         Set<State> waitTargets = collectWaitTargets(stateList);

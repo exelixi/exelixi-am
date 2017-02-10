@@ -194,6 +194,7 @@ public interface Structure {
         for (Scope scope : actorMachine.getScopes()) {
             if (!scope.isPersistent()) {
                 emitter().emit("static void %s_init_scope_%d(%s) {", name, i, String.join(", ", code().scopeIOArguments(scope)));
+                backend().preprocessor().pragma("HLS INLINE");
                 emitter().increaseIndentation();
                 for (VarDecl var : scope.getDeclarations()) {
                     Type type = types().declaredType(var);
@@ -320,6 +321,7 @@ public interface Structure {
 
     default void evaluateCondition(PredicateCondition condition, String name, int i) {
         emitter().emit("static bool %s_condition_%d() {", name, i);
+        backend().preprocessor().pragma("HLS INLINE");
         emitter().increaseIndentation();
         emitter().emit("return %s;", backend().code().evaluate(condition.getExpression()));
         emitter().decreaseIndentation();
@@ -331,6 +333,7 @@ public interface Structure {
         String parameterPort = backend().code().type(condition.getPortName());
         String parameterCount = "uint32_t " + condition.getPortName().getName() + "_count";
         emitter().emit("static bool %s_condition_%d(%s, %s) {", name, i, parameterPort, parameterCount);
+        backend().preprocessor().pragma("HLS INLINE");
         emitter().increaseIndentation();
         if (condition.isInputCondition()) {
             emitter().emit("return !%s.empty() && %s_count > %d;", condition.getPortName().getName(), condition.getPortName().getName(), condition.N());

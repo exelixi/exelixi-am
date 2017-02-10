@@ -68,6 +68,7 @@ public interface FileNotice {
         emitter().emit("%s%s |_____/_/\\_\\___|_|_/_/\\_\\_|", comment, comment);
         emitter().emit("%s%s ----------------------------------------------------------------------------", comment, comment);
         emitter().emit("%s%s -- Exelixi Dataflow Code Generation for Vivado HLS", comment, comment);
+        emitter().emit("%s%s -- Based on Tycho Compiler", comment, comment);
         emitter().emit("%s%s ----------------------------------------------------------------------------", comment, comment);
         emitter().emit("%s%s -- This file is generated automatically by Exelixi HLS, please do not modify", comment, comment);
         emitter().emit("%s%s -- %s", comment, comment, message);

@@ -444,7 +444,7 @@ public interface Code {
             case "^":
                 return String.format("(%s %s %s)", evaluate(left), operation, evaluate(right));
             case "=":
-                return String.format("(%s == %s)", evaluate(left), evaluate(right));
+                return String.format("%s == %s", evaluate(left), evaluate(right));
             case "mod":
                 return String.format("(%s %% %s)", evaluate(left), evaluate(right));
             case "and":
