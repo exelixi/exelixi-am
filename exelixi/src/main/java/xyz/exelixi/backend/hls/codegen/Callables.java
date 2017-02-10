@@ -33,7 +33,7 @@ public interface Callables {
     @Binding
     HlsBackendCore backend();
     /*
-	Global scope:
+    Global scope:
 	- typedef fat pointers for all different ExprLambda and ExprProc types
 	- declare prototype for all ExprLambda and ExprProc
 	- define function for all external VarDecls of callable type containing the extern function declaration.
@@ -105,21 +105,6 @@ public interface Callables {
     default void collectCallablesInScope(Entity entity, Consumer<Expression> collector) {
     }
 
-    default void declareCallableFatPointerType(CallableType type) {
-        String name = mangle(type).encode();
-        String returnType = backend().code().type(type.getReturnType());
-        Stream<String> parameterStream = type.getParameterTypes().stream()
-                .map(backend().code()::type);
-        String parameters = Stream.concat(Stream.of("void *restrict"), parameterStream).collect(Collectors.joining(", "));
-        backend().emitter().emit("typedef struct {");
-        backend().emitter().increaseIndentation();
-        backend().emitter().emit("%s (*f)(%s);", returnType, parameters);
-        backend().emitter().emit("void *env;");
-        backend().emitter().decreaseIndentation();
-        backend().emitter().emit("} %s;", name);
-        backend().emitter().emit("");
-    }
-
     NameExpression mangle(Type t);
 
     default NameExpression mangle(CallableType type) {
@@ -168,7 +153,7 @@ public interface Callables {
 
     default void callablePrototype(ExprLambda lambda) {
         String name = functionName(lambda);
-       // closureTypedef(lambda.getClosure(), name);
+        // closureTypedef(lambda.getClosure(), name);
         backend().emitter().emit("%s;", lambdaHeader(lambda));
     }
 
@@ -199,6 +184,7 @@ public interface Callables {
     default void callableDefinition(ExprLambda lambda) {
         String name = functionName(lambda);
         backend().emitter().emit("%s {", lambdaHeader(lambda));
+        backend().preprocessor().pragma("HLS INLINE");
         backend().emitter().increaseIndentation();
         backend().emitter().emit("return %s;", backend().code().evaluate(lambda.getBody()));
         backend().emitter().decreaseIndentation();
@@ -209,8 +195,8 @@ public interface Callables {
     default void callableDefinition(ExprProc proc) {
         String name = functionName(proc);
         backend().emitter().emit("%s {", procHeader(proc));
+        backend().preprocessor().pragma("HLS INLINE");
         backend().emitter().increaseIndentation();
-        backend().emitter().emit("envt_%s *env = (envt_%s*) e;", name, name);
         proc.getBody().forEach(backend().code()::execute);
         backend().emitter().decreaseIndentation();
         backend().emitter().emit("}");
