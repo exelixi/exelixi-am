@@ -41,8 +41,8 @@ import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.reporting.CompilationException;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
-import xyz.exelixi.utils.ModelHelper;
-import xyz.exelixi.utils.Pair;
+import xyz.exelixi.utils.Resolver;
+import xyz.exelixi.utils.Utils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -50,6 +50,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -61,8 +62,8 @@ public interface Host {
     @Binding
     AoclBackendCore backend();
 
-    default ModelHelper helper() {
-        return backend().helper().get();
+    default Resolver resolver() {
+        return backend().resolver().get();
     }
 
     default Emitter emitter() {
@@ -93,7 +94,7 @@ public interface Host {
     }
 
     default void generateLibrary(Path sourcePath, Path includePath) {
-        // copy the AOCL library helper source code
+        // copy the AOCL library resolver source code
         emitter().open(sourcePath.resolve(sourcePath.resolve("AOCL.cpp")));
         try (InputStream in = ClassLoader.getSystemResourceAsStream("aocl_backend_code/AOCL.cpp")) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(in));
@@ -103,7 +104,7 @@ public interface Host {
         }
         emitter().close();
 
-        // copy the AOCL library helper header
+        // copy the AOCL library resolver header
         emitter().open(includePath.resolve(includePath.resolve("AOCL.h")));
         try (InputStream in = ClassLoader.getSystemResourceAsStream("aocl_backend_code/AOCL.h")) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(in));
@@ -113,7 +114,7 @@ public interface Host {
         }
         emitter().close();
 
-        // copy the utils library helper header
+        // copy the utils library resolver header
         emitter().open(includePath.resolve(includePath.resolve("utils.h")));
         try (InputStream in = ClassLoader.getSystemResourceAsStream("aocl_backend_code/utils.h")) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(in));
@@ -130,8 +131,9 @@ public interface Host {
 
         Map<Object, Integer> kernelsIds = createKernelsIdMap(network);
         Map<Object, String> kernelsNames = createKernelsNameMap(network);
+        List<Connection> borderConnections = Utils.union(resolver().getIncomings(), resolver().getOutgoings());
 
-        // create the main
+        // of the main
         emitter().open(path.resolve(path.resolve("main.cpp")));
         backend().fileNotice().generateNotice("Host source code");
         // includes
@@ -146,7 +148,7 @@ public interface Host {
         emitter().emit("#define BINARY_NAME \"device.aocx\"");
         emitter().emit("#define QUEUES_SIZE %d", kernelsIds.keySet().size());
         emitter().emit("#define PIPES_SIZE 512");
-        emitter().emit("#define THREADS_SIZE %d", helper().getBorders().size());
+        emitter().emit("#define THREADS_SIZE %d", borderConnections.size());
 
         emitter().emit("");
         kernelsNames.entrySet().stream().forEach(k -> emitter().emit("#define QUEUE_%s %d", k.getValue().toUpperCase(), kernelsIds.get(k.getKey())));
@@ -171,8 +173,8 @@ public interface Host {
         emitter().emit("using TimePoint = std::chrono::time_point<Clock, Duration>;");
         emitter().emit("");
 
-        for (Connection connection : helper().getBorders()) {
-            int fifoId = helper().getConnectionId(connection);
+        for (Connection connection : borderConnections) {
+            int fifoId = resolver().getConnectionId(connection);
             emitter().emit("int *interface_%d_buffer;", fifoId); //TODO add TYPE
             emitter().emit("int *interface_%d_read;", fifoId);
             emitter().emit("int *interface_%d_write;", fifoId);
@@ -183,8 +185,8 @@ public interface Host {
         emitter().emit("");
 
         // input interface threads
-        for (Connection input : helper().getInputs()) {
-            int fifoId = helper().getConnectionId(input);
+        for (Connection input : resolver().getIncomings()) {
+            int fifoId = resolver().getConnectionId(input);
             emitter().emit("// input interface thread for FIFO %d", fifoId);
             emitter().emit("void *ft_interface_%d(void *) {", fifoId);
             emitter().increaseIndentation();
@@ -250,8 +252,8 @@ public interface Host {
         emitter().emit("");
 
         // output interface threads
-        for (Connection output : helper().getOutputs()) {
-            int fifoId = helper().getConnectionId(output);
+        for (Connection output : resolver().getOutgoings()) {
+            int fifoId = resolver().getConnectionId(output);
             emitter().emit("// input interface thread for FIFO %d", fifoId);
             emitter().emit("");
             emitter().emit("void *ft_interface_%d(void *) {", fifoId);
@@ -324,7 +326,7 @@ public interface Host {
         emitter().emit("cl_device_id device = devices[0];");
         emitter().emit("");
 
-        emitter().emit("// create a context");
+        emitter().emit("// of a context");
         emitter().emit("context = clCreateContext(NULL, 1, &device, &ocl_context_callback_message, NULL, &status);");
         emitter().emit("test_error(status, \"ERROR: Failed to open the context.\\n\", &cleanup);");
         emitter().emit("");
@@ -333,34 +335,34 @@ public interface Host {
         emitter().emit("for(int i = 0; i < QUEUES_SIZE; ++i){");
         emitter().increaseIndentation();
         emitter().emit("queues[i] = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &status);");
-        emitter().emit("test_error(status, \"ERROR: Failed to create command queue.\\n\", &cleanup);");
+        emitter().emit("test_error(status, \"ERROR: Failed to of command queue.\\n\", &cleanup);");
         emitter().decreaseIndentation();
         emitter().emit("}");
         emitter().emit("");
 
-        emitter().emit("// create the program");
+        emitter().emit("// of the program");
         emitter().emit("program = create_program_from_binary(context, BINARY_NAME, &device, 1, &status);");
-        emitter().emit("test_error(status, \"ERROR: Failed to create the program.\\n\", &cleanup);");
+        emitter().emit("test_error(status, \"ERROR: Failed to of the program.\\n\", &cleanup);");
         emitter().emit("");
 
-        emitter().emit("// create the program");
+        emitter().emit("// of the program");
         emitter().emit("status = clBuildProgram(program, 1, &device, \"\", NULL, NULL);");
-        emitter().emit("test_error(status, \"ERROR: Failed to create the program.\\n\", &cleanup);");
+        emitter().emit("test_error(status, \"ERROR: Failed to of the program.\\n\", &cleanup);");
         emitter().emit("");
 
-        // for each instance and in/out interface create a kernel
-        emitter().emit("// create the kernels");
+        // for each instance and in/out interface of a kernel
+        emitter().emit("// of the kernels");
         for (String kernel : kernelsNames.values()) {
             emitter().emit("kernel_%s = clCreateKernel(program, \"%s\", &status);", kernel, kernel);
-            emitter().emit("test_error(status, \"ERROR: Failed to create the kernel %s.\\n\", &cleanup);", kernel);
+            emitter().emit("test_error(status, \"ERROR: Failed to of the kernel %s.\\n\", &cleanup);", kernel);
         }
         emitter().emit("");
 
-        emitter().emit("// create the pipe"); // FIXME add pipe TYPE
+        emitter().emit("// of the pipe"); // FIXME add pipe TYPE
         for (Connection connection : network.getConnections()) {
-            int fifoId = helper().getConnectionId(connection);
+            int fifoId = resolver().getConnectionId(connection);
             emitter().emit("cl_mem pipe_%d = clCreatePipe(context, 0, sizeof(cl_int), PIPES_SIZE, NULL, &status); ", fifoId);
-            emitter().emit("test_error(status, \"ERROR: Failed to create the pipe %d.\\n\", &cleanup);", fifoId);
+            emitter().emit("test_error(status, \"ERROR: Failed to of the pipe %d.\\n\", &cleanup);", fifoId);
         }
         emitter().emit("");
 
@@ -368,18 +370,18 @@ public interface Host {
         for (Instance instance : network.getInstances()) {
             int i = 0;
             String kernel_name = kernelsNames.get(instance);
-            for (Pair<PortDecl, Connection> incoming : helper().getIncomings(instance.getInstanceName())) {
-                PortDecl port = incoming.v1;
-                Connection connection = incoming.v2;
-                int fifoId = helper().getConnectionId(connection);
+            for (Map.Entry<Connection, PortDecl> incoming : resolver().getIncomingsMap(instance.getInstanceName()).entrySet()) {
+                PortDecl port = incoming.getValue();
+                Connection connection = incoming.getKey();
+                int fifoId = resolver().getConnectionId(connection);
                 emitter().emit("// instance: %s, in-port: %s", instance.getInstanceName(), port.getName());
                 emitter().emit("status = clSetKernelArg(kernel_%s, %d, sizeof(cl_mem), &pipe_%d);", kernel_name, i, fifoId);
                 i++;
             }
-            for (Pair<PortDecl, Connection> outgoing : helper().getOutgoings(instance.getInstanceName())) {
-                PortDecl port = outgoing.v1;
-                Connection connection = outgoing.v2;
-                int fifoId = helper().getConnectionId(connection);
+            for (Map.Entry<Connection, PortDecl> outgoing : resolver().getOutgoingsMap(instance.getInstanceName()).entrySet()) {
+                PortDecl port = outgoing.getValue();
+                Connection connection = outgoing.getKey();
+                int fifoId = resolver().getConnectionId(connection);
                 emitter().emit("// instance: %s, out-port: %s", instance.getInstanceName(), port.getName());
                 emitter().emit("status = clSetKernelArg(kernel_%s, %d, sizeof(cl_mem), &pipe_%d);", kernel_name, i, fifoId);
                 i++;
@@ -388,10 +390,10 @@ public interface Host {
         emitter().emit("");
 
 
-        // create the buffers for the interfaces
-        emitter().emit("// create the interface buffers");
-        for (Connection connection : helper().getBorders()) {
-            int fifoId = helper().getConnectionId(connection);
+        // of the buffers for the interfaces
+        emitter().emit("// of the interface buffers");
+        for (Connection connection : borderConnections) {
+            int fifoId = resolver().getConnectionId(connection);
             emitter().emit("interface_%d_buffer = (int *) aligned_malloc(sizeof(int) * PIPES_SIZE);", fifoId); //TODO add fifo TYPE
             emitter().emit("cl_mem mem_interface_%d_buffer = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int) * PIPES_SIZE, interface_%d_buffer, &status);", fifoId, fifoId);
             emitter().emit("interface_%d_read   = (int *) aligned_malloc(sizeof(int));", fifoId);
@@ -402,9 +404,9 @@ public interface Host {
         emitter().emit("");
 
         emitter().emit("// link buffers and interface kernels");
-        for (Connection connection : helper().getBorders()) {
+        for (Connection connection : borderConnections) {
             // Set the kernel arguments
-            int fifoId = helper().getConnectionId(connection);
+            int fifoId = resolver().getConnectionId(connection);
             String kernelName = kernelsNames.get(connection);
             emitter().emit("status = clSetKernelArg(kernel_%s, 0, sizeof(cl_mem), &mem_interface_%d_buffer);", kernelName, fifoId);
             emitter().emit("test_error(status, \"ERROR: Failed to set kernel %s arg 0.\\n\", &cleanup);", kernelName);
@@ -430,8 +432,8 @@ public interface Host {
 
         // the kernel interfaces
         int threadId = 0;
-        for (Connection connection : helper().getBorders()) {
-            int fifoId = helper().getConnectionId(connection);
+        for (Connection connection : borderConnections) {
+            int fifoId = resolver().getConnectionId(connection);
             emitter().emit("pthread_create(&threads[%d], NULL, ft_interface_%d, NULL);", threadId, fifoId);
             threadId++;
         }
@@ -518,10 +520,10 @@ public interface Host {
         for (Instance instance : network.getInstances()) {
             map.put(instance, index++);
         }
-        for (Connection input : helper().getInputs()) {
+        for (Connection input : resolver().getIncomings()) {
             map.put(input, index++);
         }
-        for (Connection output : helper().getOutputs()) {
+        for (Connection output : resolver().getOutgoings()) {
             map.put(output, index++);
         }
 
@@ -531,12 +533,12 @@ public interface Host {
     default Map<Object, String> createKernelsNameMap(Network network) {
         Map<Object, String> map = new HashMap<>();
         network.getInstances().forEach(i -> map.put(i, i.getInstanceName()));
-        for (Connection input : helper().getInputs()) {
-            int fifoId = helper().getConnectionId(input);
+        for (Connection input : resolver().getIncomings()) {
+            int fifoId = resolver().getConnectionId(input);
             map.put(input, "interface_" + fifoId);
         }
-        for (Connection output : helper().getOutputs()) {
-            int fifoId = helper().getConnectionId(output);
+        for (Connection output : resolver().getOutgoings()) {
+            int fifoId = resolver().getConnectionId(output);
             map.put(output, "interface_" + fifoId);
         }
         return map;

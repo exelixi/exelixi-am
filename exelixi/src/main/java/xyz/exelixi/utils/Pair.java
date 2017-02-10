@@ -53,7 +53,7 @@ public class Pair<T, V> {
      *            object 2
      * @return
      */
-    public static <T, V> Pair<T, V> create(T v1, V v2) {
+    public static <T, V> Pair<T, V> of(T v1, V v2) {
         /*
         if (v1 == null) {
             throw new IllegalArgumentException("Value v1 cannot be null");

@@ -43,18 +43,14 @@ import se.lth.cs.tycho.ir.decl.GlobalVarDecl;
 import se.lth.cs.tycho.ir.decl.VarDecl;
 import se.lth.cs.tycho.ir.network.Connection;
 import se.lth.cs.tycho.ir.network.Instance;
-import se.lth.cs.tycho.ir.network.Network;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
-import se.lth.cs.tycho.reporting.CompilationException;
 import se.lth.cs.tycho.types.CallableType;
 import se.lth.cs.tycho.types.Type;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
+import xyz.exelixi.utils.Resolver;
+import xyz.exelixi.utils.Utils;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,6 +61,8 @@ public interface Device {
 
     @Binding
     AoclBackendCore backend();
+
+    default Resolver resolver(){return  backend().resolver().get();}
 
     default Emitter emitter() { return backend().emitter(); }
 
@@ -149,8 +147,10 @@ public interface Device {
         for(Instance instance : backend().task().getNetwork().getInstances()){
             kernels.add("device/" + instance.getInstanceName()+".cl");
         }
-        for(Connection connection : backend().helper().get().getBorders()){
-            int id = backend().helper().get().getConnectionId(connection);
+
+        List<Connection> borderConnections = Utils.union(resolver().getIncomings(), resolver().getOutgoings());
+        for(Connection connection : borderConnections){
+            int id = backend().resolver().get().getConnectionId(connection);
             kernels.add("device/interface_"+id+".cl");
         }
 

@@ -37,15 +37,12 @@ import org.multij.Module;
 import se.lth.cs.tycho.ir.decl.GlobalEntityDecl;
 import se.lth.cs.tycho.ir.decl.VarDecl;
 import se.lth.cs.tycho.ir.entity.Entity;
-import se.lth.cs.tycho.ir.entity.PortDecl;
 import se.lth.cs.tycho.ir.entity.cal.CalActor;
 import se.lth.cs.tycho.ir.entity.cal.ProcessDescription;
-import se.lth.cs.tycho.ir.network.Connection;
 import se.lth.cs.tycho.phases.attributes.Names;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
-import xyz.exelixi.utils.Pair;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -100,8 +97,8 @@ public interface Structure {
         String name = backend().instance().get().getInstanceName();
 
         List<String> parameters = new ArrayList<>();
-        backend().helper().get().getIncomings(name).stream().forEach(p -> parameters.add(code().inputPortDeclaration(p.v1, p.v2)));
-        backend().helper().get().getOutgoings(name).stream().forEach(p -> parameters.add(code().outputPortDeclaration(p.v1,p.v2)));
+        backend().resolver().get().getIncomingsMap(name).entrySet().forEach(p -> parameters.add(code().inputPortDeclaration(p.getValue(), p.getKey())));
+        backend().resolver().get().getOutgoingsMap(name).entrySet().forEach(p -> parameters.add(code().outputPortDeclaration(p.getValue(), p.getKey())));
 
 
 

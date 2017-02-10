@@ -34,7 +34,6 @@ package xyz.exelixi.backend.opencl.aocl.phases;
 import org.multij.MultiJ;
 import se.lth.cs.tycho.comp.CompilationTask;
 import se.lth.cs.tycho.comp.Context;
-import se.lth.cs.tycho.ir.entity.PortDecl;
 import se.lth.cs.tycho.ir.network.Connection;
 import se.lth.cs.tycho.ir.network.Instance;
 import se.lth.cs.tycho.ir.network.Network;
@@ -42,7 +41,7 @@ import se.lth.cs.tycho.phases.Phase;
 import se.lth.cs.tycho.reporting.CompilationException;
 import xyz.exelixi.Settings;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
-import xyz.exelixi.utils.ModelHelper;
+import xyz.exelixi.utils.Resolver;
 import xyz.exelixi.utils.Utils;
 
 import java.io.File;
@@ -82,7 +81,7 @@ public class AoclBackendPhase implements Phase {
     @Override
     public CompilationTask execute(CompilationTask task, Context context) throws CompilationException {
 
-        // create the directories
+        // of the directories
         // Get target Path
         targetPath = context.getConfiguration().get(Settings.targetPath);
 
@@ -97,8 +96,8 @@ public class AoclBackendPhase implements Phase {
                 .bind("context").to(context)
                 .instance();
 
-        ModelHelper helper = ModelHelper.create(task);
-        core.helper().set(helper);
+        Resolver helper = Resolver.create(task);
+        core.resolver().set(helper);
 
         //** generate the devices code **//
         // globals definitions
@@ -113,12 +112,12 @@ public class AoclBackendPhase implements Phase {
         }
 
         // Generate CL source code for every input port
-        for(Connection connection : helper.getInputs()){
+        for(Connection connection : helper.getIncomings()){
             core.interfaces().generateInputInterface(connection, device_srcPath);
         }
 
         // Generate CL source code for every output port
-        for(Connection connection : helper.getOutputs()){
+        for(Connection connection : helper.getOutgoings()){
             core.interfaces().generateOutputInterface(connection, device_srcPath);
         }
 
@@ -132,8 +131,8 @@ public class AoclBackendPhase implements Phase {
         /** generate the Synthesis script **/
         core.device().generateSynthesisScript(targetPath);
 
-        // clear the model helper, we do not need it anymore
-        core.helper().clear();
+        // clear the model resolver, we do not need it anymore
+        core.resolver().clear();
 
         return task;
     }

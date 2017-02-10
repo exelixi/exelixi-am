@@ -70,10 +70,10 @@ $(EMU_TARGET_DIR)/$(EMU_TARGET) : Makefile $(SRCS) $(INCS) $(EMU_TARGET_DIR)
 			-o $(EMU_TARGET_DIR)/$(EMU_TARGET)
 
 $(EMU_TARGET_DIR) :
-	$(ECHO)mkdir $(EMU_TARGET_DIR)
+	$(ECHO)mkdir -p $(EMU_TARGET_DIR)
 
 $(ARM_TARGET_DIR) :
-	$(ECHO)mkdir $(ARM_TARGET_DIR)
+	$(ECHO)mkdir -p $(ARM_TARGET_DIR)
 
 # make clean
 clean :
