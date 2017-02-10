@@ -57,6 +57,7 @@ public interface Callables {
         backend().emitter().emit("");
     }
 
+
     default void collectCallableTypes(IRNode node, Consumer<CallableType> collector) {
     }
 
@@ -74,13 +75,6 @@ public interface Callables {
             if (type instanceof CallableType) {
                 collector.accept((CallableType) type);
             }
-        }
-    }
-
-    default void declareEnvironmentForCallablesInScope(IRNode scope) {
-        for (Expression callable : callablesInScope(scope)) {
-            String functionName = functionName(callable);
-            backend().emitter().emit("envt_%s env_%s;", functionName, functionName);
         }
     }
 
@@ -172,8 +166,6 @@ public interface Callables {
     default void callablePrototype(IRNode callable) {
     }
 
-    ;
-
     default void callablePrototype(ExprLambda lambda) {
         String name = functionName(lambda);
        // closureTypedef(lambda.getClosure(), name);
@@ -208,7 +200,6 @@ public interface Callables {
         String name = functionName(lambda);
         backend().emitter().emit("%s {", lambdaHeader(lambda));
         backend().emitter().increaseIndentation();
-        lambda.forEachChild(this::declareEnvironmentForCallablesInScope);
         backend().emitter().emit("return %s;", backend().code().evaluate(lambda.getBody()));
         backend().emitter().decreaseIndentation();
         backend().emitter().emit("}");
@@ -219,7 +210,6 @@ public interface Callables {
         String name = functionName(proc);
         backend().emitter().emit("%s {", procHeader(proc));
         backend().emitter().increaseIndentation();
-        proc.forEachChild(this::declareEnvironmentForCallablesInScope);
         backend().emitter().emit("envt_%s *env = (envt_%s*) e;", name, name);
         proc.getBody().forEach(backend().code()::execute);
         backend().emitter().decreaseIndentation();

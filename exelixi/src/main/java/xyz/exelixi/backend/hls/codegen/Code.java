@@ -397,7 +397,7 @@ public interface Code {
     }
 
     default String evaluate(ExprDeref deref) {
-        return "(*" + evaluate(deref.getReference()) + ")";
+        return evaluate(deref.getReference());
     }
 
     default String evaluate(ExprGlobalVariable variable) {
@@ -626,41 +626,16 @@ public interface Code {
     }
 
     default String evaluate(ExprLambda lambda) {
-        backend().emitter().emit("// begin evaluate(ExprLambda)");
         String functionName = backend().callables().functionName(lambda);
-        String env = backend().callables().environmentName(lambda);
-        for (ClosureVarDecl var : lambda.getClosure()) {
-            assign(types().declaredType(var), env + "." + variables().declarationName(var), var.getValue());
-        }
-
-        Type type = backend().types().type(lambda);
-        String typeName = backend().callables().mangle(type).encode();
-        String funPtr = backend().variables().generateTemp();
-        backend().emitter().emit("%s %s = { &%s, &%s };", typeName, funPtr, functionName, env);
-
-        backend().emitter().emit("// end evaluate(ExprLambda)");
-        return funPtr;
+        return functionName;
     }
 
     default String evaluate(ExprProc proc) {
-        backend().emitter().emit("// begin evaluate(ExprProc)");
         String functionName = backend().callables().functionName(proc);
-        String env = backend().callables().environmentName(proc);
-        for (ClosureVarDecl var : proc.getClosure()) {
-            assign(types().declaredType(var), env + "." + variables().declarationName(var), var.getValue());
-        }
-
-        Type type = backend().types().type(proc);
-        String typeName = backend().callables().mangle(type).encode();
-        String funPtr = backend().variables().generateTemp();
-        backend().emitter().emit("%s %s = { &%s, &%s };", typeName, funPtr, functionName, env);
-
-        backend().emitter().emit("// end evaluate(ExprProc)");
-        return funPtr;
+        return functionName;
     }
 
     default String evaluate(ExprLet let) {
-        let.forEachChild(backend().callables()::declareEnvironmentForCallablesInScope);
         for (VarDecl decl : let.getVarDecls()) {
             Type type = types().declaredType(decl);
             String name = variables().declarationName(decl);
@@ -709,7 +684,6 @@ public interface Code {
     default void execute(StmtBlock block) {
         emitter().emit("{");
         emitter().increaseIndentation();
-        backend().callables().declareEnvironmentForCallablesInScope(block);
         for (VarDecl decl : block.getVarDecls()) {
             Type t = types().declaredType(decl);
             String declarationName = variables().declarationName(decl);

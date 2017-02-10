@@ -40,6 +40,7 @@ import se.lth.cs.tycho.ir.decl.VarDecl;
 import se.lth.cs.tycho.ir.entity.Entity;
 import se.lth.cs.tycho.ir.entity.PortDecl;
 import se.lth.cs.tycho.ir.entity.am.*;
+import se.lth.cs.tycho.ir.expr.ExprLambda;
 import se.lth.cs.tycho.phases.attributes.Names;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
@@ -146,7 +147,6 @@ public interface Structure {
         int i = 0;
         for (Scope scope : actorMachine.getScopes()) {
             emitter().emit("// -- Scope %d", i);
-            backend().callables().declareEnvironmentForCallablesInScope(scope);
             for (VarDecl var : scope.getDeclarations()) {
                 if (scope.isPersistent()) {
                     String decl = "";
@@ -155,19 +155,19 @@ public interface Structure {
                     } else {
                         decl = code().declaration(types().declaredType(var), backend().variables().declarationName(var));
                     }
-                    if(var.getValue() != null) {
+                    if (var.getValue() != null) {
                         String value = code().evaluate(var.getValue());
-                        if(var.isConstant()){
+                        if (var.isConstant()) {
                             Type type = types().declaredType(var);
-                            if(type instanceof ListType){
+                            if (type instanceof ListType) {
                                 emitter().emit("static %s = %s;", decl, value);
-                            }else {
+                            } else {
                                 backend().preprocessor().defineDeclaration(backend().variables().declarationName(var), value);
                             }
-                        }else {
+                        } else {
                             emitter().emit("static %s = %s;", decl, value);
                         }
-                    }else{
+                    } else {
                         emitter().emit("static %s;", decl);
                     }
                 } else {

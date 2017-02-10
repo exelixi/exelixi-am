@@ -157,14 +157,14 @@ public interface Global {
 
         for (VarDecl decl : varDecls) {
             Type type = types().declaredType(decl);
-            if (decl.isExternal() && type instanceof CallableType) {
+            if (decl.isExternal()) {
                 // -- Not Supported
             } else {
-                if (decl.isConstant() && !(type instanceof CallableType)) {
+                if (decl.isConstant()) {
                     if (type instanceof ListType) {
                         ListType t = (ListType) type;
                         String declaration = code().declaration(t, backend().variables().declarationName(decl));
-                        emitter().emit("%s = %s",declaration,  code().evaluate(decl.getValue()));
+                        emitter().emit("%s = %s", declaration, code().evaluate(decl.getValue()));
                     } else {
                         preprocessor().defineDeclaration(backend().variables().declarationName(decl), code().evaluate(decl.getValue()));
                     }

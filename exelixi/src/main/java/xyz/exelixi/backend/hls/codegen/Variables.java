@@ -11,6 +11,8 @@ import se.lth.cs.tycho.ir.decl.VarDecl;
 import se.lth.cs.tycho.ir.entity.am.ActorMachine;
 import se.lth.cs.tycho.ir.entity.am.Scope;
 import se.lth.cs.tycho.ir.expr.ExprGlobalVariable;
+import se.lth.cs.tycho.ir.expr.ExprRef;
+import se.lth.cs.tycho.ir.expr.Expression;
 import xyz.exelixi.backend.hls.HlsBackendCore;
 
 import java.util.stream.Collectors;
@@ -57,7 +59,9 @@ public interface Variables {
         VarDecl decl = backend().names().declaration(var);
         IRNode parent = backend().tree().parent(decl);
         if (decl instanceof ClosureVarDecl) {
-            return "(env." + declarationName(decl) + ")";
+            Variable cVar = ((ExprRef) decl.getValue()).getVariable();
+            // -- FIXME: Hack for getting the name
+            return "f_" + cVar.getName() +"_0";
         } else if (parent instanceof Scope || parent instanceof ActorMachine) {
             return declarationName(decl);
         } else {
