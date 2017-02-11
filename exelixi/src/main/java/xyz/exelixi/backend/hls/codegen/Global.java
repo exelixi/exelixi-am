@@ -164,7 +164,7 @@ public interface Global {
                     if (type instanceof ListType) {
                         ListType t = (ListType) type;
                         String declaration = code().declaration(t, backend().variables().declarationName(decl));
-                        emitter().emit("%s = %s", declaration, code().evaluate(decl.getValue()));
+                        emitter().emit("const %s = %s;", declaration, code().evaluate(decl.getValue()));
                     } else {
                         preprocessor().defineDeclaration(backend().variables().declarationName(decl), code().evaluate(decl.getValue()));
                     }
