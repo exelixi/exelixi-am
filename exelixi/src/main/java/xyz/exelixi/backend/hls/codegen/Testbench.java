@@ -235,13 +235,13 @@ public interface Testbench {
         emitter().emit("std::string %s_line;", portName);
         emitter().emit("while(std::getline(%s_file,%s_line)){", portName, portName);
         emitter().increaseIndentation();
-        emitter().emit("if(!%s_line.empty()){",portName);
+        emitter().emit("if(!%s_line.empty()){", portName);
         emitter().increaseIndentation();
         emitter().emit("std::istringstream iss(%s_line);", portName);
-        emitter().emit("%s %s_tmp;", type, portName);
+        emitter().emit("int32_t %s_tmp;", portName);
         emitter().emit("iss >> %s_tmp;", portName);
         if (isInput) {
-            emitter().emit("%s.write(%s_tmp);", portName, portName);
+            emitter().emit("%s.write((%s)%s_tmp);", portName, type, portName);
         } else {
             emitter().emit("qref_%s.push(%s_tmp);", portName, portName);
         }
