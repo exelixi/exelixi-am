@@ -235,6 +235,8 @@ public interface Testbench {
         emitter().emit("std::string %s_line;", portName);
         emitter().emit("while(std::getline(%s_file,%s_line)){", portName, portName);
         emitter().increaseIndentation();
+        emitter().emit("if(!%s_line.empty()){",portName);
+        emitter().increaseIndentation();
         emitter().emit("std::istringstream iss(%s_line);", portName);
         emitter().emit("%s %s_tmp;", type, portName);
         emitter().emit("iss >> %s_tmp;", portName);
@@ -243,6 +245,8 @@ public interface Testbench {
         } else {
             emitter().emit("qref_%s.push(%s_tmp);", portName, portName);
         }
+        emitter().emit("}");
+        emitter().decreaseIndentation();
         emitter().decreaseIndentation();
         emitter().emit("}");
         emitter().emit("");
@@ -312,7 +316,7 @@ public interface Testbench {
         List<String> outputPortEmpty = new ArrayList<String>();
         for (PortDecl portDecl : actorMachine.getOutputPorts()) {
             checkOutputPort(portDecl);
-            outputPortEmpty.add(portDecl.getName() + ".empty()");
+            outputPortEmpty.add("qref_" + portDecl.getName() + ".empty()");
         }
 
         emitter().emit("end_of_execution = %s;", String.join(" && ", outputPortEmpty));
@@ -325,7 +329,7 @@ public interface Testbench {
 
     default void checkOutputPort(PortDecl portDecl) {
         String portName = portDecl.getName();
-        emitter().emit("if(%s.empty() && qref_%s.empty()){", portDecl.getName(), portName);
+        emitter().emit("if(!%s.empty() && !qref_%s.empty()){", portDecl.getName(), portName);
         emitter().increaseIndentation();
 
         String type = backend().code().type(types().declaredPortType(portDecl));
