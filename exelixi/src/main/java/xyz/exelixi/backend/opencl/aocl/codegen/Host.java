@@ -40,20 +40,21 @@ import se.lth.cs.tycho.ir.network.Network;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.reporting.CompilationException;
+import se.lth.cs.tycho.types.Type;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 import xyz.exelixi.utils.Resolver;
-import xyz.exelixi.utils.Utils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+
+import static xyz.exelixi.utils.Utils.union;
 
 /**
+ * Source code generation for the host
+ *
  * @author Simone Casale-Brunet
  */
 @Module
@@ -70,9 +71,6 @@ public interface Host {
         return backend().emitter();
     }
 
-    default Structure structure() {
-        return backend().structure();
-    }
 
     default Types types() {
         return backend().types();
@@ -82,7 +80,263 @@ public interface Host {
         return backend().code();
     }
 
-    default void generateMakeFile(Path path) {
+    /**
+     * Generate the host program
+     *
+     * @param sourcePath the path where the main.cpp file will be created
+     */
+    default void generateHost(Path sourcePath) {
+        Network network = backend().task().getNetwork();
+
+        // of the main
+        emitter().open(sourcePath.resolve(sourcePath.resolve("main.cpp")));
+        backend().fileNotice().generateNotice("Host source code");
+
+        /* ================== CONSTANTS ==================*/
+        // includes
+        emitter().emit("#include \"AOCL.h\"");
+        emitter().emit("#include \"utils.h\"");
+        emitter().emit("#include <stdio.h>");
+        emitter().emit("#include <string.h>");
+        emitter().emit("#include <chrono>");
+        emitter().emit("");
+
+        // the binary name
+        emitter().emit("#define BINARY_NAME \"device.aocx\"");
+        emitter().emit("#define PIPES_SIZE 512"); // FIXME should be the same used in the host global.h
+        emitter().emit("");
+
+        // the total number of queues used for the actors and the interfaces
+        int queuesSize = network.getInstances().size() + resolver().getIncomings().size() + resolver().getOutgoings().size();
+        emitter().emit("#define QUEUES_SIZE %d", queuesSize);
+
+        // the queue identifiers
+        int queue = 0;
+        for (Instance instance : network.getInstances()) {
+            emitter().emit("#define QUEUE_ACTOR_%s %d", instance.getInstanceName(), queue);
+            queue++;
+        }
+        for (Connection connection : union(resolver().getIncomings(), resolver().getOutgoings())) {
+            int id = resolver().getConnectionId(connection);
+            emitter().emit("#define QUEUE_INTERFACE_%d %d", id, queue);
+            queue++;
+        }
+        emitter().emit("");
+
+        // timing functions
+        emitter().emit("using Clock = std::chrono::high_resolution_clock;");
+        emitter().emit("using Ms = std::chrono::milliseconds;");
+        emitter().emit("template<class Duration>");
+        emitter().emit("using TimePoint = std::chrono::time_point<Clock, Duration>;");
+        emitter().emit("");
+
+        /* ================== HOST VARIABLES ==================*/
+        // the host variables
+        emitter().emit("cl_int status;");
+        emitter().emit("cl_context context = NULL;");
+        emitter().emit("cl_command_queue queues[QUEUES_SIZE];");
+        emitter().emit("cl_program program = NULL;");
+        network.getInstances().forEach(i -> emitter().emit("cl_kernel kernel_actor_%s = NULL;", i.getInstanceName()));
+        union(resolver().getIncomings(), resolver().getOutgoings()).forEach(c -> {
+            int id = resolver().getConnectionId(c);
+            emitter().emit("cl_kernel kernel_interface_%d = NULL;", id);
+        });
+        emitter().emit("");
+
+        // the interfaces values
+        union(resolver().getIncomings(), resolver().getOutgoings()).forEach(connection -> {
+                    int id = resolver().getConnectionId(connection);
+                    // ge the type
+                    PortDecl portDecl = connection.getTarget().getInstance().isPresent() ? resolver().getTargetPortDecl(connection) : resolver().getSourcePortDecl(connection);
+                    Type tokenType = backend().types().declaredPortType(portDecl);
+                    String type = backend().code().type(tokenType);
+                    // now create the buffer and the countes
+                    emitter().emit("volatile %s *interface_%d_buffer;", type, id);
+                    emitter().emit("volatile int *interface_%d_read;", id);
+                    emitter().emit("volatile int *interface_%d_write;", id);
+                }
+        );
+        emitter().emit("");
+
+        // functions declaration
+        emitter().emit("void cleanup();");
+        emitter().emit("void schedule_host();");
+        emitter().emit("");
+
+        /* ================== MAIN FUNCTION ==================*/
+        emitter().emit("int main(){");
+        emitter().increaseIndentation();
+        // change working directory
+        emitter().emit("set_cwd_to_execdir();");
+        emitter().emit("");
+
+        // platform selection (here the 1st by default)
+        emitter().emit("cl_uint num_platforms;");
+        emitter().emit("cl_platform_id* platforms = get_platforms(&num_platforms, &status);");
+        emitter().emit("test_error(status, \"ERROR: Unable to find any platform.\\n\", &cleanup);");
+        emitter().emit("if (!num_platforms) {");
+        emitter().increaseIndentation();
+        emitter().emit("printf(\"No platforms found....\\n\");");
+        emitter().emit("return 1;");
+        emitter().decreaseIndentation();
+        emitter().emit("}");
+        emitter().emit("");
+        emitter().emit("// take the first platform");
+        emitter().emit("cl_platform_id platform = platforms[0];");
+        emitter().emit("test_error(status, \"ERROR: Unable to find the OpenCL platform.\\n\", &cleanup);");
+        emitter().emit("printf(\"Using platform %%s\\n\", get_platform_name(platform));");
+        emitter().emit("");
+
+        // device selection (here the 1st by default)
+        emitter().emit("// get all the available devives");
+        emitter().emit("cl_uint num_devices;");
+        emitter().emit("cl_device_id* devices = get_devices(platform, CL_DEVICE_TYPE_ALL, &num_devices, &status);");
+        emitter().emit("test_error(status, \"ERROR: Unable to find any device.\\n\", &cleanup);");
+        emitter().emit("");
+        emitter().emit("// take the first device");
+        emitter().emit("cl_device_id device = devices[0];");
+        emitter().emit("");
+
+        // create the context
+        emitter().emit("// create a context");
+        emitter().emit("context = clCreateContext(NULL, 1, &device, &ocl_context_callback_message, NULL, &status);");
+        emitter().emit("test_error(status, \"ERROR: Failed to open the context.\\n\", &cleanup);");
+        emitter().emit("");
+
+        // Create the command queues
+        emitter().emit("// Create the command queues.");
+        emitter().emit("for (int i = 0; i < QUEUES_SIZE; ++i) {");
+        emitter().increaseIndentation();
+        emitter().emit("queues[i] = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &status);");
+        emitter().emit("test_error(status, \"ERROR: Failed to create command queue.\\n\", &cleanup);");
+        emitter().decreaseIndentation();
+        emitter().emit("}");
+        emitter().emit("");
+
+        // create and build the program
+        emitter().emit("// create and build the program");
+        emitter().emit("program = create_program_from_binary(context, BINARY_NAME, &device, 1, &status);");
+        emitter().emit("test_error(status, \"ERROR: Failed to create the program.\\n\", &cleanup);");
+        emitter().emit("status = clBuildProgram(program, 1, &device, \"\", NULL, NULL);");
+        emitter().emit("test_error(status, \"ERROR: Failed to create the program.\\n\", &cleanup);");
+        emitter().emit("");
+
+        // create the kernels
+        emitter().emit("// create the kernels");
+        network.getInstances().forEach(i -> {
+            String name = i.getInstanceName();
+            emitter().emit("kernel_actor_%s = clCreateKernel(program, \"%s\", &status);", name, name);
+            emitter().emit("test_error(status, \"ERROR: Failed to create the kernel for actor %s.\\n\", &cleanup);", name);
+        });
+        union(resolver().getIncomings(), resolver().getOutgoings()).forEach(c -> {
+                    int id = resolver().getConnectionId(c);
+                    emitter().emit("kernel_interface_%d = clCreateKernel(program, \"interface_%d\", &status);", id, id);
+                    emitter().emit("test_error(status, \"ERROR: Failed to create the kernel for interface %d.\\n\", &cleanup);", id);
+                }
+        );
+        emitter().emit("");
+
+        // create the pipes
+        emitter().emit("// create the pipes");
+        network.getConnections().forEach(connection -> {
+            int id = resolver().getConnectionId(connection);
+            // get connection type
+            PortDecl portDecl = connection.getTarget().getInstance().isPresent() ? resolver().getTargetPortDecl(connection) : resolver().getSourcePortDecl(connection);
+            Type tokenType = backend().types().declaredPortType(portDecl);
+            String type = backend().code().type(tokenType);
+            // now create the pipe
+            emitter().emit("cl_mem pipe_%d = clCreatePipe(context, 0, sizeof(%s), PIPES_SIZE, NULL, &status);", id, type);
+            emitter().emit("test_error(status, \"ERROR: Failed to create the pipe %d.\\n\", &cleanup);", id);
+        });
+        emitter().emit("");
+
+        // set actor kernels arguments
+        emitter().emit("// set actor kernels arguments");
+        network.getInstances().forEach(instance -> {
+            String name = instance.getInstanceName();
+            int arg = 0;
+            for (Connection connection : resolver().getIncomingsMap(instance.getInstanceName()).keySet()) { // input
+                int id = resolver().getConnectionId(connection);
+                emitter().emit("status = clSetKernelArg(kernel_actor_%s, %d, sizeof(cl_mem), &pipe_%d);", name, arg, id);
+                emitter().emit("test_error(status, \"ERROR: Failed to set argument %d on the kernel actor %s.\\n\", &cleanup);", arg, name);
+                arg++;
+            }
+            for (Connection connection : resolver().getOutgoingsMap(instance.getInstanceName()).keySet()) { // output
+                int id = resolver().getConnectionId(connection);
+                emitter().emit("status = clSetKernelArg(kernel_actor_%s, %d, sizeof(cl_mem), &pipe_%d);", name, arg, id);
+                emitter().emit("test_error(status, \"ERROR: Failed to set argument %d on the kernel actor %s.\\n\", &cleanup);", arg, name);
+                arg++;
+            }
+        });
+        emitter().emit("");
+
+        // create the interface buffers
+        emitter().emit("// create the interface buffers and link to the interface kernel");
+        union(resolver().getIncomings(), resolver().getOutgoings()).forEach(connection -> {
+                    int id = resolver().getConnectionId(connection);
+                    // ge the type
+                    PortDecl portDecl = connection.getTarget().getInstance().isPresent() ? resolver().getTargetPortDecl(connection) : resolver().getSourcePortDecl(connection);
+                    Type tokenType = backend().types().declaredPortType(portDecl);
+                    String type = backend().code().type(tokenType);
+                    // now create the buffer and the countes
+                    emitter().emit("// - interface %d", id);
+                    emitter().emit("// -- create shared memory");
+                    emitter().emit("interface_%d_buffer = (%s *) aligned_malloc(sizeof(%s) * PIPES_SIZE);", id, type, type);
+                    emitter().emit("cl_mem mem_interface_%d_buffer = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(%s) * PIPES_SIZE, (void *) interface_%d_buffer, &status);", id, type, id);
+                    emitter().emit("interface_%d_read = (int *) aligned_malloc(sizeof(int));", id);
+                    emitter().emit("cl_mem mem_interface_%d_read = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int),  (void *) interface_%d_read, &status);", id, id);
+                    emitter().emit("interface_%d_write = (int *) aligned_malloc(sizeof(int));", id);
+                    emitter().emit("cl_mem mem_interface_%d_write = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int),  (void *) interface_%d_write, &status);", id, id);
+                    emitter().emit("// -- link to the kernel");
+                    emitter().emit("status = clSetKernelArg(kernel_interface_%d, 0, sizeof(cl_mem), &mem_interface_%d_buffer);", id, id);
+                    emitter().emit("test_error(status, \"ERROR: Failed to set kernel interface_%d arg 0.\\n\", &cleanup);", id);
+                    emitter().emit("status = clSetKernelArg(kernel_interface_%d, 1, sizeof(cl_mem), &mem_interface_%d_read);", id, id);
+                    emitter().emit("test_error(status, \"ERROR: Failed to set kernel interface_%d arg 1.\\n\", &cleanup);", id);
+                    emitter().emit("status = clSetKernelArg(kernel_interface_%d, 2, sizeof(cl_mem), &mem_interface_%d_write);", id, id);
+                    emitter().emit("test_error(status, \"ERROR: Failed to set kernel interface_%d arg 2.\\n\", &cleanup);", id);
+                    emitter().emit("status = clSetKernelArg(kernel_interface_%d, 3, sizeof(cl_mem), &pipe_%d);", id, id);
+                    emitter().emit("test_error(status, \"ERROR: Failed to set kernel interface_%d arg 3.\\n\", &cleanup);", id);
+                }
+        );
+        emitter().emit("");
+
+        // print notice init ok
+        emitter().emit("printf(\"\\nKernels initialization is complete.\\n\");");
+        emitter().emit("printf(\"Launching the kernels...\\n\");");
+        emitter().emit("");
+
+        emitter().emit("// launch the actor kernels");
+        network.getInstances().forEach(instance -> {
+            String name = instance.getInstanceName();
+            emitter().emit("status = clEnqueueTask(queues[QUEUE_ACTOR_%s], kernel_actor_%s, 0, NULL, NULL);", name, name);
+            emitter().emit("test_error(status, \"ERROR: Failed to launch kernel %s\", &cleanup);", name);
+        });
+        emitter().emit("");
+        emitter().emit("schedule_host();");
+        emitter().emit("");
+        emitter().emit("cleanup();");
+        emitter().emit("");
+        emitter().emit("return 0;");
+
+        emitter().decreaseIndentation();
+        emitter().emit("}");
+        emitter().emit("");
+
+        // call the schedule and clean functions
+        scheduleFunction();
+        cleanupFunction();
+
+        // finally, close the host generated file
+        emitter().close();
+
+    }
+
+    /**
+     * Copy the makefile to compile the host application
+     *
+     * @param path the path where the makefile will be copied
+     */
+    default void copyMakeFile(Path path) {
         emitter().open(path.resolve(path.resolve("Makefile")));
         try (InputStream in = ClassLoader.getSystemResourceAsStream("aocl_backend_code/Makefile")) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(in));
@@ -93,7 +347,13 @@ public interface Host {
         emitter().close();
     }
 
-    default void generateLibrary(Path sourcePath, Path includePath) {
+    /**
+     * Copy the Exelixi AOCL library files
+     *
+     * @param sourcePath  the path where the .cpp files will be copied
+     * @param includePath the path where the .h files will be copied
+     */
+    default void copyLibrary(Path sourcePath, Path includePath) {
         // copy the AOCL library resolver source code
         emitter().open(sourcePath.resolve(sourcePath.resolve("AOCL.cpp")));
         try (InputStream in = ClassLoader.getSystemResourceAsStream("aocl_backend_code/AOCL.cpp")) {
@@ -126,352 +386,166 @@ public interface Host {
 
     }
 
-    default void generateSourceCode(Path path) {
-        Network network = backend().task().getNetwork();
+     /*=================================================================================================================*/
+    /*
+    /* Utility methods
+    /*
+    /*=================================================================================================================*/
 
-        Map<Object, Integer> kernelsIds = createKernelsIdMap(network);
-        Map<Object, String> kernelsNames = createKernelsNameMap(network);
-        List<Connection> borderConnections = Utils.union(resolver().getIncomings(), resolver().getOutgoings());
+    default void scheduleFunction() {
+        emitter().emit("void schedule_host(){");
+        emitter().increaseIndentation();
 
-        // of the main
-        emitter().open(path.resolve(path.resolve("main.cpp")));
-        backend().fileNotice().generateNotice("Host source code");
-        // includes
-        emitter().emit("#include \"AOCL.h\"");
-        emitter().emit("#include \"utils.h\"");
-        emitter().emit("#include <stdio.h>");
-        emitter().emit("#include <string.h>");
-        emitter().emit("#include <pthread.h>");
-        emitter().emit("#include <chrono>");
-        emitter().emit("");
-        // constants
-        emitter().emit("#define BINARY_NAME \"device.aocx\"");
-        emitter().emit("#define QUEUES_SIZE %d", kernelsIds.keySet().size());
-        emitter().emit("#define PIPES_SIZE 512");
-        emitter().emit("#define THREADS_SIZE %d", borderConnections.size());
-
-        emitter().emit("");
-        kernelsNames.entrySet().stream().forEach(k -> emitter().emit("#define QUEUE_%s %d", k.getValue().toUpperCase(), kernelsIds.get(k.getKey())));
-        emitter().emit("");
-
-        // parameters and kernels
-        emitter().emit("cl_int status;");
-        emitter().emit("cl_context context = NULL;");
-        emitter().emit("cl_command_queue queues[QUEUES_SIZE];");
-        emitter().emit("cl_program program = NULL;");
-        kernelsNames.values().forEach(k -> emitter().emit("cl_kernel kernel_%s = NULL;", k));
-        emitter().emit("");
-
-        // interfaces buffers
-        emitter().emit("pthread_t threads[THREADS_SIZE];");
-        emitter().emit("");
-
-        // timers
-        emitter().emit("using Clock = std::chrono::high_resolution_clock;");
-        emitter().emit("using Ms = std::chrono::milliseconds;");
-        emitter().emit("template<class Duration>");
-        emitter().emit("using TimePoint = std::chrono::time_point<Clock, Duration>;");
-        emitter().emit("");
-
-        for (Connection connection : borderConnections) {
-            int fifoId = resolver().getConnectionId(connection);
-            emitter().emit("int *interface_%d_buffer;", fifoId); //TODO add TYPE
-            emitter().emit("int *interface_%d_read;", fifoId);
-            emitter().emit("int *interface_%d_write;", fifoId);
+        // initialize the interfaces variables
+        resolver().getIncomings().forEach(connection -> {
+            int id = resolver().getConnectionId(connection);
+            emitter().emit("// input interface %d", id);
+            emitter().emit("FILE *interface_%d_fp;", id);
+            emitter().emit("interface_%d_fp = fopen(\"%s.txt\", \"r\");", id, connection.getSource().getPort()); //FIXME check if file is not null
+            emitter().emit("char * interface_%d_line;", id);
+            emitter().emit("size_t interface_%d_len = 0;", id);
+            emitter().emit("ssize_t interface_%d_readsize = 0;", id);
+            emitter().emit("int interface_%d_read_status = 0;", id);
+            emitter().emit("*interface_%d_read = 0;", id);
+            emitter().emit("*interface_%d_write = 0;", id);
             emitter().emit("");
-        }
-
-        emitter().emit("void cleanup();");
-        emitter().emit("");
-
-        // input interface threads
-        for (Connection input : resolver().getIncomings()) {
-            int fifoId = resolver().getConnectionId(input);
-            emitter().emit("// input interface thread for FIFO %d", fifoId);
-            emitter().emit("void *ft_interface_%d(void *) {", fifoId);
-            emitter().increaseIndentation();
-            emitter().emit("FILE *fp;");
-            emitter().emit("fp = fopen(\"%s.txt\", \"r\");", input.getTarget().getPort());
-            emitter().emit("char * line;");
-
-            emitter().emit("size_t len = 0;");
-            emitter().emit("ssize_t read = 0;");
-            emitter().emit("int read_status = 0;");
-
-            emitter().emit("*interface_%d_read = 0;", fifoId);
-            emitter().emit("*interface_%d_write = 0;", fifoId);
-
-            emitter().emit("if (fp != NULL) {");
-            emitter().increaseIndentation();
-            emitter().emit("while (read != -1) {");
-            emitter().increaseIndentation();
-            emitter().emit("int parsedTokens = 0;");
-            emitter().emit("int rooms = (PIPES_SIZE + *interface_%d_read - *interface_%d_write - 1) %% PIPES_SIZE;", fifoId, fifoId);
-            emitter().emit("while (rooms && (read = getline(&line, &len, fp)) != -1) {");
-            emitter().increaseIndentation();
-            emitter().emit("int value = parse_int(line, &read_status);");
-            emitter().emit("if (read_status) {");
-            emitter().increaseIndentation();
-            emitter().emit("interface_%d_buffer[(*interface_%d_write + parsedTokens) %% PIPES_SIZE] = value;", fifoId, fifoId);
-            emitter().emit("parsedTokens++;");
-            emitter().emit("rooms--;");
-            emitter().decreaseIndentation();
-            emitter().emit("} else {");
-            emitter().increaseIndentation();
-            emitter().emit("read = -1;");
-            emitter().emit("break;");
-            emitter().decreaseIndentation();
-            emitter().emit("}");
-            emitter().decreaseIndentation();
-            emitter().emit("}");
-            emitter().emit("if (parsedTokens) {");
-            emitter().increaseIndentation();
-            emitter().emit("*interface_%d_write += parsedTokens;", fifoId);
-            emitter().emit("cl_int status = clEnqueueTask(queues[QUEUE_INTERFACE_%d], kernel_interface_%d, 0, NULL, NULL);", fifoId, fifoId);
-            emitter().emit("test_error(status, \"ERROR: Failed to launch interface %d kernel.\\n\", &cleanup);", fifoId);
-            emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", fifoId);
-            emitter().decreaseIndentation();
-            emitter().emit("}else{");
-            emitter().increaseIndentation();
-            emitter().emit("pthread_yield();");
-            emitter().decreaseIndentation();
-            emitter().emit("}");
-            emitter().decreaseIndentation();
-            emitter().emit("}");
-            emitter().decreaseIndentation();
-            emitter().emit("} else {");
-            emitter().increaseIndentation();
-            emitter().emit("printf(\"ERROR: unable to read file %s.txt\\n\");", input.getTarget().getPort());
-            emitter().decreaseIndentation();
-            emitter().emit("}");
-
-            emitter().emit("return NULL;");
-            emitter().decreaseIndentation();
-            emitter().emit("}");
-        }
-        emitter().emit("");
-
-        // output interface threads
-        for (Connection output : resolver().getOutgoings()) {
-            int fifoId = resolver().getConnectionId(output);
-            emitter().emit("// input interface thread for FIFO %d", fifoId);
+        });
+        resolver().getOutgoings().forEach(connection -> {
+            int id = resolver().getConnectionId(connection);
+            emitter().emit("// output interface %d", id);
+            emitter().emit("*interface_%d_read = 0;", id);
+            emitter().emit("*interface_%d_write = 0;", id);
             emitter().emit("");
-            emitter().emit("void *ft_interface_%d(void *) {", fifoId);
-            emitter().increaseIndentation();
-            emitter().emit("*interface_%d_read = 0;", fifoId);
-            emitter().emit("*interface_%d_write = 0;", fifoId);
+        });
 
-            emitter().emit("Clock::time_point _start = Clock::now();");
-            emitter().emit("bool stop = false;");
+        // check if all input files are availables
+        emitter().emit("// check if all input files are availables");
+        emitter().emit("bool input_files_available = true;");
+        emitter().emit("");
+        resolver().getIncomings().forEach(connection -> {
+                    int id = resolver().getConnectionId(connection);
+                    emitter().emit("if(interface_%d_fp==NULL){", id);
+                    emitter().increaseIndentation();
+                    emitter().emit("printf(\"ERROR: unable to find input file %s.txt\\n\");", connection.getSource().getPort());
+                    emitter().emit("input_files_available = false;");
+                    emitter().decreaseIndentation();
+                    emitter().emit("}");
+                    emitter().emit("");
+                }
+        );
+        emitter().emit("if(!input_files_available){");
+        emitter().increaseIndentation();
+        emitter().emit("test_error(CL_CONFIGURATION_ERROR, \"ERROR: Failed to load input files\", &cleanup);");
+        emitter().decreaseIndentation();
+        emitter().emit("}");
+        emitter().emit("");
 
-            emitter().emit("while (!stop) {");
-            emitter().increaseIndentation();
-            emitter().emit("cl_int status = clEnqueueTask(queues[QUEUE_INTERFACE_%d], kernel_interface_%d, 0, NULL, NULL);", fifoId, fifoId);
-            emitter().emit("test_error(status, \"ERROR: Failed to launch  interface fifo %d.\\n\", &cleanup);", fifoId);
-            emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", fifoId);
+        emitter().emit("// schedule the interface");
+        emitter().emit("Clock::time_point time_start = Clock::now(); // timeout timer");
+        emitter().emit("do{");
+        emitter().increaseIndentation();
 
-            emitter().emit("int count = (PIPES_SIZE + *interface_%d_write - *interface_%d_read ) %% PIPES_SIZE;", fifoId, fifoId);
+        // parse input files
+        emitter().emit("// parse input files");
+        resolver().getIncomings().forEach(connection -> {
+                    int id = resolver().getConnectionId(connection);
+                    emitter().emit("if (interface_%d_readsize != -1) {", id);
+                    emitter().increaseIndentation();
+                    emitter().emit("int parsedTokens = 0;");
+                    emitter().emit("int rooms = (PIPES_SIZE + *interface_%d_read - *interface_%d_write - 1) %% PIPES_SIZE;", id, id);
+                    emitter().emit("while (rooms && (interface_%d_readsize = getline(&interface_%d_line, &interface_%d_len, interface_%d_fp)) != -1) {", id, id, id, id);
+                    emitter().increaseIndentation();
+                    emitter().emit("int value = parse_int(interface_%d_line, &interface_%d_read_status);", id, id); // FIXME add parsing accordig to the port type....
+                    emitter().emit("");
+                    emitter().emit("if (interface_%d_read_status) {", id);
+                    emitter().increaseIndentation();
+                    emitter().emit("interface_%d_buffer[(*interface_%d_write + parsedTokens) %% PIPES_SIZE] = value;", id, id);
+                    emitter().emit("parsedTokens++;");
+                    emitter().emit("rooms--;");
+                    emitter().decreaseIndentation();
+                    emitter().emit("} else {");
+                    emitter().increaseIndentation();
+                    emitter().emit("interface_%d_readsize = -1;", id);
+                    emitter().emit("break;");
+                    emitter().decreaseIndentation();
+                    emitter().emit("}"); // end if read status
+                    emitter().emit("");
+                    emitter().decreaseIndentation();
+                    emitter().emit("}"); // end while rooms
+                    emitter().emit("if (parsedTokens) {");
+                    emitter().increaseIndentation();
+                    emitter().emit("*interface_%d_write += parsedTokens;", id);
+                    emitter().emit("cl_int status = clEnqueueTask(queues[QUEUE_INTERFACE_%d], kernel_interface_%d, 0, NULL, NULL);", id, id);
+                    emitter().emit("test_error(status, \"ERROR: Failed to launch interface %d kernel.\\n\", &cleanup);", id);
+                    emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", id);
+                    emitter().emit("time_start = Clock::now();");
+                    emitter().decreaseIndentation();
+                    emitter().emit("}"); // end if parsed tokens and schedule = true
+                    emitter().decreaseIndentation();
+                    emitter().emit("}"); // end if read
+                    emitter().emit("");
+                }
+        );
+
+        // collect output data
+        emitter().emit("// collect output data");
+        emitter().emit("int count = 0;");
+        resolver().getOutgoings().forEach(connection -> {
+            int id = resolver().getConnectionId(connection);
+            emitter().emit("status = clEnqueueTask(queues[QUEUE_INTERFACE_%d], kernel_interface_%d, 0, NULL, NULL);", id, id);
+            emitter().emit("test_error(status, \"ERROR: Failed to launch  interface %d.\\n\", &cleanup);", id);
+            emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", id);
+            emitter().emit("count = (PIPES_SIZE + *interface_%d_write - *interface_%d_read) %% PIPES_SIZE;", id, id);
             emitter().emit("if(count){");
             emitter().increaseIndentation();
-            // consume values
-            emitter().emit("//for(int i = 0; i < count; i++){");
-            emitter().emit("//    printf(\"%%d \", interface_%d_buffer[(*interface_%d_read + i) %% PIPES_SIZE]);", fifoId, fifoId);
-            emitter().emit("//}");
-            emitter().emit("*interface_%d_read = (*interface_%d_read + count) %% PIPES_SIZE;", fifoId, fifoId);
-            emitter().emit("_start = Clock::now();");
-            emitter().decreaseIndentation();
-            emitter().emit("}else{");
-            emitter().increaseIndentation();
-            emitter().emit("stop = TimePoint<Ms>(std::chrono::duration_cast < Ms > (Clock::now() - _start)) > TimePoint<Ms>(Ms(3000));");
-            emitter().emit("pthread_yield();");
-            emitter().decreaseIndentation();
-            emitter().emit("}");
-            emitter().decreaseIndentation();
-            emitter().emit("}");
-
-            emitter().emit("return NULL;");
-
+            emitter().emit("printf(\"[host] Interface %d received %%d tokens\\n\", count);", id);
+            emitter().emit("*interface_%d_read = (*interface_%d_read + count) %% PIPES_SIZE;", id, id);
+            emitter().emit("time_start = Clock::now();");
             emitter().decreaseIndentation();
             emitter().emit("}");
             emitter().emit("");
-        }
-        emitter().emit("");
+        });
 
-
-        emitter().emit("int main() {");//FIXME add options
-        emitter().increaseIndentation();
-        emitter().emit("set_cwd_to_execdir();");
-        emitter().emit("");
-
-        emitter().emit("cl_uint num_platforms;");
-        emitter().emit("cl_platform_id* platforms = get_platforms(&num_platforms, &status);");
-        emitter().emit("test_error(status, \"ERROR: Unable to find any platform.\\n\", &cleanup);");
-        emitter().emit("if (!num_platforms) {");
-        emitter().increaseIndentation();
-        emitter().emit("printf(\"No platforms found....\\n\");");
-        emitter().emit("return 1;");
         emitter().decreaseIndentation();
-        emitter().emit("}");
-
-        emitter().emit("cl_platform_id platform = platforms[0];");
-        emitter().emit("printf(\"Using platform %s\\n\", get_platform_name(platform));");
-
-        emitter().emit("// get all the available devives");
-        emitter().emit("cl_uint num_devices;");
-        emitter().emit("cl_device_id* devices = get_devices(platform, CL_DEVICE_TYPE_ALL, &num_devices, &status);");
-        emitter().emit("test_error(status, \"ERROR: Unable to find any device.\\n\", &cleanup);");
+        emitter().emit("}while(TimePoint<Ms>(std::chrono::duration_cast<Ms>(Clock::now() - time_start)) < TimePoint<Ms>(Ms(2000)));");
         emitter().emit("");
 
-        emitter().emit("// take the first device");
-        emitter().emit("cl_device_id device = devices[0];");
-        emitter().emit("");
-
-        emitter().emit("// of a context");
-        emitter().emit("context = clCreateContext(NULL, 1, &device, &ocl_context_callback_message, NULL, &status);");
-        emitter().emit("test_error(status, \"ERROR: Failed to open the context.\\n\", &cleanup);");
-        emitter().emit("");
-
-        emitter().emit("// Create the command queues.");
-        emitter().emit("for(int i = 0; i < QUEUES_SIZE; ++i){");
-        emitter().increaseIndentation();
-        emitter().emit("queues[i] = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &status);");
-        emitter().emit("test_error(status, \"ERROR: Failed to of command queue.\\n\", &cleanup);");
-        emitter().decreaseIndentation();
-        emitter().emit("}");
-        emitter().emit("");
-
-        emitter().emit("// of the program");
-        emitter().emit("program = create_program_from_binary(context, BINARY_NAME, &device, 1, &status);");
-        emitter().emit("test_error(status, \"ERROR: Failed to of the program.\\n\", &cleanup);");
-        emitter().emit("");
-
-        emitter().emit("// of the program");
-        emitter().emit("status = clBuildProgram(program, 1, &device, \"\", NULL, NULL);");
-        emitter().emit("test_error(status, \"ERROR: Failed to of the program.\\n\", &cleanup);");
-        emitter().emit("");
-
-        // for each instance and in/out interface of a kernel
-        emitter().emit("// of the kernels");
-        for (String kernel : kernelsNames.values()) {
-            emitter().emit("kernel_%s = clCreateKernel(program, \"%s\", &status);", kernel, kernel);
-            emitter().emit("test_error(status, \"ERROR: Failed to of the kernel %s.\\n\", &cleanup);", kernel);
-        }
-        emitter().emit("");
-
-        emitter().emit("// of the pipe"); // FIXME add pipe TYPE
-        for (Connection connection : network.getConnections()) {
-            int fifoId = resolver().getConnectionId(connection);
-            emitter().emit("cl_mem pipe_%d = clCreatePipe(context, 0, sizeof(cl_int), PIPES_SIZE, NULL, &status); ", fifoId);
-            emitter().emit("test_error(status, \"ERROR: Failed to of the pipe %d.\\n\", &cleanup);", fifoId);
-        }
-        emitter().emit("");
-
-        emitter().emit("// Set the kernel arguments");
-        for (Instance instance : network.getInstances()) {
-            int i = 0;
-            String kernel_name = kernelsNames.get(instance);
-            for (Map.Entry<Connection, PortDecl> incoming : resolver().getIncomingsMap(instance.getInstanceName()).entrySet()) {
-                PortDecl port = incoming.getValue();
-                Connection connection = incoming.getKey();
-                int fifoId = resolver().getConnectionId(connection);
-                emitter().emit("// instance: %s, in-port: %s", instance.getInstanceName(), port.getName());
-                emitter().emit("status = clSetKernelArg(kernel_%s, %d, sizeof(cl_mem), &pipe_%d);", kernel_name, i, fifoId);
-                i++;
-            }
-            for (Map.Entry<Connection, PortDecl> outgoing : resolver().getOutgoingsMap(instance.getInstanceName()).entrySet()) {
-                PortDecl port = outgoing.getValue();
-                Connection connection = outgoing.getKey();
-                int fifoId = resolver().getConnectionId(connection);
-                emitter().emit("// instance: %s, out-port: %s", instance.getInstanceName(), port.getName());
-                emitter().emit("status = clSetKernelArg(kernel_%s, %d, sizeof(cl_mem), &pipe_%d);", kernel_name, i, fifoId);
-                i++;
-            }
-        }
-        emitter().emit("");
-
-
-        // of the buffers for the interfaces
-        emitter().emit("// of the interface buffers");
-        for (Connection connection : borderConnections) {
-            int fifoId = resolver().getConnectionId(connection);
-            emitter().emit("interface_%d_buffer = (int *) aligned_malloc(sizeof(int) * PIPES_SIZE);", fifoId); //TODO add fifo TYPE
-            emitter().emit("cl_mem mem_interface_%d_buffer = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int) * PIPES_SIZE, interface_%d_buffer, &status);", fifoId, fifoId);
-            emitter().emit("interface_%d_read   = (int *) aligned_malloc(sizeof(int));", fifoId);
-            emitter().emit("cl_mem mem_interface_%d_read = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int), interface_%d_read, &status);", fifoId, fifoId);
-            emitter().emit("interface_%d_write  = (int *) aligned_malloc(sizeof(int));", fifoId);
-            emitter().emit("cl_mem mem_interface_%d_write = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int), interface_%d_write, &status);", fifoId, fifoId);
-        }
-        emitter().emit("");
-
-        emitter().emit("// link buffers and interface kernels");
-        for (Connection connection : borderConnections) {
-            // Set the kernel arguments
-            int fifoId = resolver().getConnectionId(connection);
-            String kernelName = kernelsNames.get(connection);
-            emitter().emit("status = clSetKernelArg(kernel_%s, 0, sizeof(cl_mem), &mem_interface_%d_buffer);", kernelName, fifoId);
-            emitter().emit("test_error(status, \"ERROR: Failed to set kernel %s arg 0.\\n\", &cleanup);", kernelName);
-            emitter().emit("status = clSetKernelArg(kernel_%s, 1, sizeof(cl_mem), &mem_interface_%d_read);", kernelName, fifoId);
-            emitter().emit("test_error(status, \"ERROR: Failed to set kernel %s arg 1.\\n\", &cleanup);", kernelName);
-            emitter().emit("status = clSetKernelArg(kernel_%s, 2, sizeof(cl_mem), &mem_interface_%d_write);", kernelName, fifoId);
-            emitter().emit("test_error(status, \"ERROR: Failed to set kernel %s arg 2.\\n\", &cleanup);", kernelName);
-            emitter().emit("status = clSetKernelArg(kernel_%s, 3, sizeof(cl_mem), &pipe_%d);", kernelName, fifoId);
-            emitter().emit("test_error(status, \"ERROR: Failed to set kernel %s arg 3.\\n\", &cleanup);", kernelName);
-        }
-        emitter().emit("");
-
-        emitter().emit("printf(\"\\nKernels initialization is complete.\\n\");");
-        emitter().emit("printf(\"Launching the kernels...\\n\");");
-        emitter().emit("");
-
-        // a task for each instance
-        for (Instance instance : network.getInstances()) {
-            emitter().emit("status = clEnqueueTask(queues[QUEUE_%s], kernel_%s, 0, NULL, NULL);", kernelsNames.get(instance).toUpperCase(), kernelsNames.get(instance));
-            emitter().emit("test_error(status, \"ERROR: Failed to launch kernel %s\", &cleanup);", kernelsNames.get(instance));
-        }
-        emitter().emit("");
-
-        // the kernel interfaces
-        int threadId = 0;
-        for (Connection connection : borderConnections) {
-            int fifoId = resolver().getConnectionId(connection);
-            emitter().emit("pthread_create(&threads[%d], NULL, ft_interface_%d, NULL);", threadId, fifoId);
-            threadId++;
-        }
-        emitter().emit("");
-
-        emitter().emit("for(int i = 0; i < THREADS_SIZE; i++){");
-        emitter().increaseIndentation();
-        emitter().emit("pthread_join(threads[i], NULL);");
-        emitter().decreaseIndentation();
-        emitter().emit("}");
-        emitter().emit("");
-
-
-        // end here
-        emitter().emit("cleanup();");
-        emitter().emit("");
-        emitter().emit("return 0;");
+        emitter().emit("printf(\"[host] timeout reached... scheduling done\\n\");");
 
         emitter().decreaseIndentation();
         emitter().emit("}");
         emitter().emit("");
+    }
 
-        // cleanup function
-        emitter().emit("void cleanup() {");
+    default void cleanupFunction() {
+        Network network = backend().task().getNetwork();
+
+        emitter().emit("void cleanup(){");
         emitter().increaseIndentation();
         emitter().emit("");
 
-        for (String kernel : kernelsNames.values()) {
-            emitter().emit("if(kernel_%s)", kernel);
-            emitter().emit("{");
+        network.getInstances().forEach(instance -> {
+            String name = instance.getInstanceName();
+            emitter().emit("if(kernel_actor_%s){", name);
             emitter().increaseIndentation();
-            emitter().emit("clReleaseKernel(kernel_%s);", kernel);
+            emitter().emit("clReleaseKernel(kernel_actor_%s);", name);
             emitter().decreaseIndentation();
             emitter().emit("}");
             emitter().emit("");
-        }
+        });
 
-        emitter().emit("if(program){");
+        union(resolver().getIncomings(), resolver().getOutgoings()).forEach(connection -> {
+                    int id = resolver().getConnectionId(connection);
+                    emitter().emit("if(kernel_interface_%d){", id);
+                    emitter().increaseIndentation();
+                    emitter().emit("clReleaseKernel(kernel_interface_%d);", id);
+                    emitter().decreaseIndentation();
+                    emitter().emit("}");
+                    emitter().emit("");
+                }
+        );
+
+        emitter().emit("if (program) {");
         emitter().increaseIndentation();
         emitter().emit("clReleaseProgram(program);");
         emitter().decreaseIndentation();
@@ -481,7 +555,7 @@ public interface Host {
         emitter().emit("for (int i = 0; i < QUEUES_SIZE; ++i) {");
         emitter().increaseIndentation();
         emitter().emit("cl_command_queue queue = queues[i];");
-        emitter().emit("if(queue){");
+        emitter().emit("if (queue) {");
         emitter().increaseIndentation();
         emitter().emit("clReleaseCommandQueue(queue);");
         emitter().decreaseIndentation();
@@ -499,49 +573,7 @@ public interface Host {
 
         emitter().decreaseIndentation();
         emitter().emit("}");
-
-
-        emitter().close();
-    }
-
-    //FIXME move in a transformation or in a utility class?
-    default Map<Connection, Integer> createConnectionsIdMap(Network network) {
-        Map<Connection, Integer> map = new HashMap<>();
-        int id = 0;
-        for (Connection connection : network.getConnections()) {
-            map.put(connection, ++id);
-        }
-        return map;
-    }
-
-    default Map<Object, Integer> createKernelsIdMap(Network network) {
-        Map<Object, Integer> map = new HashMap<>();
-        int index = 0;
-        for (Instance instance : network.getInstances()) {
-            map.put(instance, index++);
-        }
-        for (Connection input : resolver().getIncomings()) {
-            map.put(input, index++);
-        }
-        for (Connection output : resolver().getOutgoings()) {
-            map.put(output, index++);
-        }
-
-        return map;
-    }
-
-    default Map<Object, String> createKernelsNameMap(Network network) {
-        Map<Object, String> map = new HashMap<>();
-        network.getInstances().forEach(i -> map.put(i, i.getInstanceName()));
-        for (Connection input : resolver().getIncomings()) {
-            int fifoId = resolver().getConnectionId(input);
-            map.put(input, "interface_" + fifoId);
-        }
-        for (Connection output : resolver().getOutgoings()) {
-            int fifoId = resolver().getConnectionId(output);
-            map.put(output, "interface_" + fifoId);
-        }
-        return map;
+        emitter().emit("");
     }
 
 }

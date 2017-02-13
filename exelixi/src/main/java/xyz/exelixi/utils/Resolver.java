@@ -35,6 +35,7 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Table;
 import se.lth.cs.tycho.comp.CompilationTask;
 import se.lth.cs.tycho.comp.SourceUnit;
+import se.lth.cs.tycho.ir.Port;
 import se.lth.cs.tycho.ir.entity.PortDecl;
 import se.lth.cs.tycho.ir.entity.cal.CalActor;
 import se.lth.cs.tycho.ir.network.Connection;
@@ -61,6 +62,7 @@ public class Resolver {
     private Map<Instance, CalActor> entityDeclMap;
     private List<Connection> inputs;
     private List<Connection> outputs;
+    private Map<Connection, Pair<PortDecl, PortDecl>> connectionsPortsMap;
 
 
     /**
@@ -77,6 +79,7 @@ public class Resolver {
         outgoings = new HashMap<>();
         inputs = new ArrayList<>();
         outputs = new ArrayList<>();
+        connectionsPortsMap = new HashMap<>();
 
         for (Instance instance : network.getInstances()) {
             instancesMap.put(instance.getInstanceName(), instance);
@@ -107,6 +110,9 @@ public class Resolver {
             Pair<String, String> source = Pair.of(srcInstance, srcPort);
             Pair<String, String> target = Pair.of(tgtInstance, tgtPort);
 
+            PortDecl sourcePortDecl = null;
+            PortDecl targetPortDecl = null;
+
             // of the global table
             if (srcInstance != null && tgtInstance != null) {
                 connectionsTable.put(source, target, connection);
@@ -119,9 +125,9 @@ public class Resolver {
 
                 Instance instance = instancesMap.get(srcInstance);
                 CalActor actor = entityDeclMap.get(instance);
-                PortDecl port = actor.getOutputPorts().stream().filter(p -> p.getName().equals(srcPort)).findFirst().get();
+                sourcePortDecl = actor.getOutputPorts().stream().filter(p -> p.getName().equals(srcPort)).findFirst().get();
 
-                outgoings.get(srcInstance).put(connection, port);
+                outgoings.get(srcInstance).put(connection, sourcePortDecl);
             } else {
                 inputs.add(connection);
             }
@@ -132,11 +138,13 @@ public class Resolver {
 
                 Instance instance = instancesMap.get(tgtInstance);
                 CalActor actor = entityDeclMap.get(instance);
-                PortDecl port = actor.getInputPorts().stream().filter(p -> p.getName().equals(tgtPort)).findFirst().get();
-                incomings.get(tgtInstance).put(connection, port);
+                targetPortDecl = actor.getInputPorts().stream().filter(p -> p.getName().equals(tgtPort)).findFirst().get();
+                incomings.get(tgtInstance).put(connection, targetPortDecl);
             } else {
                 outputs.add(connection);
             }
+
+            connectionsPortsMap.put(connection, Pair.of(sourcePortDecl, targetPortDecl));
         }
 
     }
@@ -236,6 +244,35 @@ public class Resolver {
      */
     public List<Connection> getOutgoings() {
         return Collections.unmodifiableList(outputs);
+    }
+
+
+    /**
+     * Get the source port declaration of the given connection.
+     * <code>null</code> if it does not exists (i.e. the connection is not valid or the connection has not an attached port)
+     *
+     * @param connection
+     * @return
+     */
+    public PortDecl getSourcePortDecl(Connection connection) {
+        if (connectionsPortsMap.containsKey(connection)) {
+            return connectionsPortsMap.get(connection).v1;
+        }
+        return null;
+    }
+
+    /**
+     * Get the target port declaration of the given connection.
+     * <code>null</code> if it does not exists (i.e. the connection is not valid or the connection has not an attached port)
+     *
+     * @param connection
+     * @return
+     */
+    public PortDecl getTargetPortDecl(Connection connection) {
+        if (connectionsPortsMap.containsKey(connection)) {
+            return connectionsPortsMap.get(connection).v2;
+        }
+        return null;
     }
 
 }

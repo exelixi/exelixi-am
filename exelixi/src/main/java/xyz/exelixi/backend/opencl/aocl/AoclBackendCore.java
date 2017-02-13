@@ -92,9 +92,6 @@ public interface AoclBackendCore {
     DefaultValues defaultValues();
 
     @Binding(MODULE)
-    Structure structure();
-
-    @Binding(MODULE)
     Code code();
 
     @Binding(MODULE)

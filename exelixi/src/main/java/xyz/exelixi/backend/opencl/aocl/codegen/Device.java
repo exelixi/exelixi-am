@@ -31,16 +31,15 @@
  */
 package xyz.exelixi.backend.opencl.aocl.codegen;
 
-/**
- * @author Simone Casale-Brunet
- */
-
 import org.multij.Binding;
 import org.multij.Module;
 import se.lth.cs.tycho.comp.SourceUnit;
 import se.lth.cs.tycho.ir.decl.GlobalEntityDecl;
 import se.lth.cs.tycho.ir.decl.GlobalVarDecl;
 import se.lth.cs.tycho.ir.decl.VarDecl;
+import se.lth.cs.tycho.ir.entity.Entity;
+import se.lth.cs.tycho.ir.entity.cal.CalActor;
+import se.lth.cs.tycho.ir.entity.cal.ProcessDescription;
 import se.lth.cs.tycho.ir.network.Connection;
 import se.lth.cs.tycho.ir.network.Instance;
 import se.lth.cs.tycho.phases.attributes.Types;
@@ -56,17 +55,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Source code generation for the devices
+ *
+ * @author Simone Casale-Brunet
+ */
 @Module
 public interface Device {
 
     @Binding
     AoclBackendCore backend();
 
-    default Resolver resolver(){return  backend().resolver().get();}
+    default Resolver resolver() { return backend().resolver().get(); }
 
     default Emitter emitter() { return backend().emitter(); }
-
-    default Structure structure() { return backend().structure(); }
 
     default Types types() {
         return backend().types();
@@ -76,49 +78,62 @@ public interface Device {
         return backend().code();
     }
 
+    /**
+     * Generate the source code for an instance. Only processes are supported
+     *
+     * @param instance
+     * @param path
+     */
     default void generateInstance(Instance instance, Path path) {
         backend().instance().set(instance);
 
-        GlobalEntityDecl actor = backend().task().getSourceUnits().stream()
+        GlobalEntityDecl actorEntity = backend().task().getSourceUnits().stream()
                 .map(SourceUnit::getTree)
                 .filter(ns -> ns.getQID().equals(instance.getEntityName().getButLast()))
                 .flatMap(ns -> ns.getEntityDecls().stream())
                 .filter(decl -> decl.getName().equals(instance.getEntityName().getLast().toString()))
                 .findFirst().get();
 
-        String fileNameBase = instance.getInstanceName();
-        // -- Filename
-        String fileName = fileNameBase + ".cl";
+        // check if the actor is a process, if not thrown an exception
+        Entity entity = actorEntity.getEntity();
+        if (!(entity instanceof CalActor)) {
+            throw new Error("unsupported actor type: only processes are supported");
+        }
 
-        // -- Open file for code generation
-        emitter().open(path.resolve(fileName));
+        System.out.println("Generating source code for actor: " + backend().instance().get().getInstanceName());
 
-        // -- File Notice
+        // open the emitter. the file is <instance_name>.cl
+        emitter().open(path.resolve(instance.getInstanceName() + ".cl"));
+
+        // add file Notice
         backend().fileNotice().generateNotice("Source code for Instance: " + instance.getInstanceName() + ", Actor: " + instance.getEntityName());
-        emitter().emit("");
 
-        // -- Actor Structure Declaration
-        structure().actorGeneration(actor);
+        // source code generation
+        generateActor((CalActor) entity);
 
-        // -- Close the File
+        // close the File
         emitter().close();
         backend().instance().clear();
     }
 
+
+    /**
+     * Generate the global.h file with contains all the constant definition shared by the kernels of the network
+     *
+     * @param path
+     */
     default void generateGlobals(Path path) {
         emitter().open(path.resolve(path.resolve("global.h")));
         emitter().emit("#ifndef GLOBAL_H");
         emitter().emit("#define GLOBAL_H");
         emitter().emit("");
-        globalVariableDeclarations(getGlobalVarDecls());
-        emitter().emit("#define FIFO_DEPTH 512");
-        emitter().emit("");
-        emitter().emit("#endif");
-        emitter().close();
-    }
 
-    default void globalVariableDeclarations(List<GlobalVarDecl> varDecls) {
-        for (VarDecl decl : varDecls) {
+        List<GlobalVarDecl> globalVarDecls = backend().task()
+                .getSourceUnits().stream()
+                .flatMap(unit -> unit.getTree().getVarDecls().stream())
+                .collect(Collectors.toList());
+
+        for (VarDecl decl : globalVarDecls) {
             Type type = types().declaredType(decl);
             if (decl.isExternal() && type instanceof CallableType) {
                 throw new Error("Not supported");
@@ -132,30 +147,91 @@ public interface Device {
                 emitter().emit("#define %s %s", backend().variables().declarationName(decl), code().evaluate(decl.getValue()));
             }
         }
+
+        emitter().emit("#define FIFO_DEPTH 512");
+        emitter().emit("");
+        emitter().emit("#endif");
+        emitter().close();
     }
 
-    default List<GlobalVarDecl> getGlobalVarDecls() {
-        return backend().task()
-                .getSourceUnits().stream()
-                .flatMap(unit -> unit.getTree().getVarDecls().stream())
-                .collect(Collectors.toList());
-    }
-
+    /**
+     * Generate the AOCL launch synthesis scripts
+     *
+     * @param path
+     */
     default void generateSynthesisScript(Path path) {
         emitter().open(path.resolve(path.resolve("aocl_synthesis.sh")));
         List<String> kernels = new ArrayList<>();
-        for(Instance instance : backend().task().getNetwork().getInstances()){
-            kernels.add("device/" + instance.getInstanceName()+".cl");
+        for (Instance instance : backend().task().getNetwork().getInstances()) {
+            kernels.add("device/" + instance.getInstanceName() + ".cl");
         }
 
         List<Connection> borderConnections = Utils.union(resolver().getIncomings(), resolver().getOutgoings());
-        for(Connection connection : borderConnections){
+        for (Connection connection : borderConnections) {
             int id = backend().resolver().get().getConnectionId(connection);
-            kernels.add("device/interface_"+id+".cl");
+            kernels.add("device/interface_" + id + ".cl");
         }
 
         emitter().emit("#!/bin/bash");
-        emitter().emit("aoc -march=emulator %s -o bin/device.aocx", String.join(" ", kernels));
+        emitter().emit("mkdir -p bin/emu");
+        emitter().emit("aoc -march=emulator %s -o bin/emu/device.aocx", String.join(" ", kernels));
         emitter().close();
+    }
+
+    /*=================================================================================================================*/
+    /*
+    /* Utility methods
+    /*
+    /*=================================================================================================================*/
+
+    default void generateActor(CalActor actor) {
+        String name = backend().instance().get().getInstanceName();
+
+        List<String> parameters = new ArrayList<>();
+        backend().resolver().get().getIncomingsMap(name).entrySet().forEach(p -> parameters.add(code().inputPortDeclaration(p.getValue(), p.getKey())));
+        backend().resolver().get().getOutgoingsMap(name).entrySet().forEach(p -> parameters.add(code().outputPortDeclaration(p.getValue(), p.getKey())));
+
+        // actor.getInputPorts().forEach(x -> parameters.add(code().inputPortDeclaration(x)));
+        // actor.getOutputPorts().forEach(x -> parameters.addAll(code().outputPortDeclaration(x)));
+
+        emitter().emit("#include \"global.h\"");
+        emitter().emit("");
+
+
+        emitter().emit("__kernel void %s(%s){", name, String.join(", ", parameters));
+        emitter().emit("");
+        emitter().increaseIndentation();
+
+        // state variables
+        generateStateVariables(actor);
+        // process description
+        generateProcessDescription(actor.getProcessDescription());
+
+        emitter().decreaseIndentation();
+        emitter().emit("}");
+    }
+
+    default void generateStateVariables(CalActor actor) {
+        if (!actor.getVarDecls().isEmpty()) emitter().emit("// state variables");
+        for (VarDecl var : actor.getVarDecls()) {
+            String decl = code().declaration(types().declaredType(var), backend().variables().declarationName(var));
+            emitter().emit("%s;", decl);
+        }
+        emitter().emit("");
+    }
+
+    default void generateProcessDescription(ProcessDescription process) {
+        if (process.isRepeated()) {
+            emitter().emit("while(1){");
+            emitter().increaseIndentation();
+        }
+
+        emitter().emit("// process body");
+        process.getStatements().forEach(backend().code()::execute);
+
+        if (process.isRepeated()) {
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+        }
     }
 }

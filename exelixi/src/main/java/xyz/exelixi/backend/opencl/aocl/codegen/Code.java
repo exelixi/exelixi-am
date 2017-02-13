@@ -220,15 +220,14 @@ public interface Code {
         int id = resolver().getConnectionId(connection);
 
         String type = type(types().declaredPortType(portDecl));
-        String portName = portDecl.getName();
-        String attributes = "__attribute__((blocking))";
+        String attributes = "__attribute__((blocking)) __attribute__((depth(FIFO_DEPTH)))";
         return "read_only" + " pipe " + type + " " + attributes + " " + " FIFO_" + id;
     }
 
     default String outputPortDeclaration(PortDecl portDecl, Connection connection) {
         int id = resolver().getConnectionId(connection);
         String type = type(types().declaredPortType(portDecl));
-        String attributes = "__attribute__((blocking))";
+        String attributes = "__attribute__((blocking)) __attribute__((depth(FIFO_DEPTH)))";
         return "write_only" + " pipe " + type + " " + attributes + " " + "FIFO_" + id;
     }
 
