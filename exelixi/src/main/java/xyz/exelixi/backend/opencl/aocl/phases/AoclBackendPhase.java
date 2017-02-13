@@ -99,7 +99,10 @@ public class AoclBackendPhase implements Phase {
         Resolver helper = Resolver.create(task);
         core.resolver().set(helper);
 
-        //** generate the devices code **//
+        /* ========================================================================== */
+        /* DEVICES AND INTERFACES CODE                                                */
+        /* ========================================================================== */
+
         // globals definitions
         core.device().generateGlobals(device_srcPath);
 
@@ -121,12 +124,15 @@ public class AoclBackendPhase implements Phase {
             core.interfaces().generateOutputInterface(connection, device_srcPath);
         }
 
-        //**  generate the host code **/
-        core.host().generateLibrary(host_srcPath, host_includePath); // the AOCL library
-        core.host().generateSourceCode(host_srcPath);
+         /* ========================================================================== */
+        /* HOST CODE                                                                  */
+        /* ========================================================================== */
+
+        core.host().copyLibrary(host_srcPath, host_includePath); // the AOCL library
+        core.host().generateHost(host_srcPath);
 
         /** generate the Makefile **/
-        core.host().generateMakeFile(targetPath);
+        core.host().copyMakeFile(targetPath);
 
         /** generate the Synthesis script **/
         core.device().generateSynthesisScript(targetPath);

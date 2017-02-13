@@ -38,7 +38,7 @@ import se.lth.cs.tycho.phases.cbackend.Emitter;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 
 /**
- * File Notice
+ * File Notice (licence template)
  *
  * @author Simone Casale-Brunet
  */
@@ -51,6 +51,10 @@ public interface FileNotice {
         return backend().emitter();
     }
 
+    /**
+     * Append to the current opened emitter a file notice containing the licence template
+     * @param message
+     */
     default void generateNotice(String message) {
         emitter().emit("// ----------------------------------------------------------------------------");
         emitter().emit("//   _____          _ _      _ ");
