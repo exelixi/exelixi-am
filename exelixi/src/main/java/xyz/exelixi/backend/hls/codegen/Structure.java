@@ -150,8 +150,6 @@ public interface Structure {
             for (VarDecl var : scope.getDeclarations()) {
                 if (scope.isPersistent()) {
                     String decl = "";
-                    // -- FIXME: Temporary FIFO DEPTH
-                    emitter().emit("#define FIFO_DEPTH 4096");
                     if (actorMachine.getValueParameters().contains(var)) {
                         // -- FIXME : Find out that a variable is initalized by a parameter
                     } else {
@@ -180,7 +178,8 @@ public interface Structure {
             emitter().emit("");
             i++;
         }
-
+        // -- FIXME: Temporary FIFO DEPTH
+        emitter().emit("#define FIFO_DEPTH 4096");
         emitter().emit("// -- Actor Machine Program Counter");
         emitter().emit("static int program_counter = 0;");
         emitter().emit("");
@@ -338,10 +337,10 @@ public interface Structure {
         backend().preprocessor().pragma("HLS INLINE");
         emitter().increaseIndentation();
         if (condition.isInputCondition()) {
-            emitter().emit("return !%s.empty() && %s_count > %d;", condition.getPortName().getName(), condition.getPortName().getName(), condition.N());
+            emitter().emit("return !%s.empty() && %s_count >= %d;", condition.getPortName().getName(), condition.getPortName().getName(), condition.N());
         } else {
             // FIXME : Add FIFO SIZE
-            emitter().emit("return !%s.full() && FIFO_DEPTH - %s_count > %d;", condition.getPortName().getName(), condition.getPortName().getName(), condition.N());
+            emitter().emit("return !%s.full() && FIFO_DEPTH - %s_count >= %d;", condition.getPortName().getName(), condition.getPortName().getName(), condition.N());
         }
         emitter().decreaseIndentation();
         emitter().emit("}");
