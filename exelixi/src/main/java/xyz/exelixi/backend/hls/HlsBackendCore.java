@@ -139,6 +139,9 @@ public interface HlsBackendCore {
     Global global();
 
     @Binding(MODULE)
+    Testbench testbench();
+
+    @Binding(MODULE)
     TclHlsProject tclHlsProject();
 
 }

@@ -51,12 +51,12 @@ public interface Actor {
     @Binding
     HlsBackendCore backend();
 
-    default Preprocessor preprocessor() {
-        return backend().preprocessor();
-    }
-
     default Emitter emitter() {
         return backend().emitter();
+    }
+
+    default Preprocessor preprocessor() {
+        return backend().preprocessor();
     }
 
     default Structure structure() {
@@ -83,9 +83,10 @@ public interface Actor {
         emitter().emit("");
 
         // -- Includes
-        preprocessor().systemInclude("hls_stream.h");
         preprocessor().systemInclude("stdint.h");
+        preprocessor().systemInclude("hls_stream.h");
         preprocessor().userInclude("global.h");
+        preprocessor().userInclude(fileNameBase + ".h");
         emitter().emit("");
 
         // -- Actor Structure Declaration

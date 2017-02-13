@@ -281,7 +281,7 @@ public interface Structure {
                     // -- FIXME: Temporary Hack
                     for (PortDecl portDecl : actorMachine.getOutputPorts()) {
                         if (portDecl.getName().equals(port.getName())) {
-                            parameters.add(backend().code().type(portDecl));
+                            parameters.add(backend().code().typeDeclaration(portDecl,true));
                         }
                     }
                 }

@@ -233,6 +233,21 @@ public interface Code {
     String type(Type type);
 
 
+    default List<String> portIO(List<PortDecl> portDecls, boolean isReference, boolean emitCount) {
+        List<String> parameters = new ArrayList<String>();
+        for (PortDecl portDecl : portDecls) {
+            parameters.add(backend().code().typeDeclaration(portDecl, isReference));
+            if (emitCount) {
+                // -- Count
+                String type = "uint32_t";
+                String count = type + " " + portDecl.getName() + "_count";
+                parameters.add(count);
+            }
+        }
+        return parameters;
+    }
+
+
     default List<String> actorMachineIO(ActorMachine actorMachine) {
         List<String> parameters = new ArrayList<String>();
 
@@ -241,27 +256,15 @@ public interface Code {
         List<PortDecl> outputs = actorMachine.getOutputPorts();
 
         // -- Treat Inputs
-        for (PortDecl portDecl : inputs) {
-            parameters.add(backend().code().type(portDecl));
-            // -- Count
-            String type = "uint32_t";
-            String count = type + " " + portDecl.getName() + "_count";
-            parameters.add(count);
-        }
+        parameters.addAll(portIO(inputs, true, true));
 
         // -- Treat outputs
-        for (PortDecl portDecl : outputs) {
-            parameters.add(backend().code().type(portDecl));
-            // -- Count
-            String type = "uint32_t";
-            String count = type + " " + portDecl.getName() + "_count";
-            parameters.add(count);
-        }
+        parameters.addAll(portIO(outputs, true, true));
 
         return parameters;
     }
 
-    default List<String> actorMachineIOName(ActorMachine actorMachine, boolean emitInputs) {
+    default List<String> actorMachineIOName(ActorMachine actorMachine, boolean emitInputs, boolean emitCounts) {
         List<String> names = new ArrayList<String>();
 
         if (emitInputs) {
@@ -269,12 +272,18 @@ public interface Code {
             // -- Treat Inputs
             for (PortDecl portDecl : inputs) {
                 names.add(portDecl.getName());
+                if(emitCounts){
+                    names.add(portDecl.getName()+"_count");
+                }
             }
         }
         List<PortDecl> outputs = actorMachine.getOutputPorts();
         // -- Treat outputs
         for (PortDecl portDecl : outputs) {
             names.add(portDecl.getName());
+            if(emitCounts){
+                names.add(portDecl.getName()+"_count");
+            }
         }
 
         return names;
@@ -325,12 +334,12 @@ public interface Code {
         return names;
     }
 
-    default String type(PortDecl portDecl) {
+    default String typeDeclaration(PortDecl portDecl, boolean isReference) {
         String parentType = "hls::stream";
         String childType = type(types().declaredPortType(portDecl));
         String finalType = parentType + "< " + childType + " >";
         String portName = portDecl.getName();
-        return finalType + " &" + portName;
+        return finalType + (isReference ? " &" : " ") + portName;
     }
 
     default String type(Port port) {

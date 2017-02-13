@@ -95,7 +95,7 @@ public interface Controllers {
         emitter().emit("// -- Controller");
         emitter().emit("");
         emitter().emit(emitControllerPrototype(name, actorMachine) + "{");
-        List<String> portPragmas = backend().code().actorMachineIOName(actorMachine,true);
+        List<String> portPragmas = backend().code().actorMachineIOName(actorMachine,true,false);
         for(String port : portPragmas ){
             backend().preprocessor().pragma("INTERFACE axis port="+port);
         }
@@ -173,7 +173,7 @@ public interface Controllers {
     default void emitInstruction(String name, Exec exec, Map<State, Integer> stateNumbers, ActorMachine actorMachine) {
         Transition transition = actorMachine.getTransitions().get(exec.transition());
         List<String> arguments = backend().code().transitionIOName(transition, false);
-        List<String> actorMachineIO = backend().code().actorMachineIOName(actorMachine, false);
+        List<String> actorMachineIO = backend().code().actorMachineIOName(actorMachine, false,false);
         arguments.sort(new PortOrderComparator(actorMachineIO));
         emitter().emit("%s_transition_%d(%s);", name, exec.transition(), String.join(", ", arguments));
         emitter().emit("program_counter = %d;", stateNumbers.get(exec.target()));

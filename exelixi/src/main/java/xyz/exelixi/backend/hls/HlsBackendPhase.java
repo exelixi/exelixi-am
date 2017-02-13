@@ -80,6 +80,9 @@ public class HlsBackendPhase implements Phase {
         // -- Generator Actor Code
         generateActors(core);
 
+        // -- Generate Testbench Code
+        generateTestbenches(core);
+
         // -- Generate Vivado HLS Projects
         generateTclProjects(core);
         return task;
@@ -109,6 +112,15 @@ public class HlsBackendPhase implements Phase {
             backend.actor().generateSourceCode(instance, srcPath);
         }
     }
+
+
+    private void generateTestbenches(HlsBackendCore backend){
+        for (Instance instance : backend.task().getNetwork().getInstances()) {
+            // -- Generate Testbench
+            backend.testbench().generateTestbench(instance,srcTestbenchPath);
+        }
+    }
+
 
     /**
      * Generate Vivado HLS TCL projects for the design
