@@ -42,18 +42,26 @@ import se.lth.cs.tycho.ir.entity.cal.CalActor;
 import se.lth.cs.tycho.ir.entity.cal.ProcessDescription;
 import se.lth.cs.tycho.ir.network.Connection;
 import se.lth.cs.tycho.ir.network.Instance;
+import se.lth.cs.tycho.ir.network.Network;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
+import se.lth.cs.tycho.reporting.CompilationException;
 import se.lth.cs.tycho.types.CallableType;
 import se.lth.cs.tycho.types.Type;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 import xyz.exelixi.utils.Resolver;
 import xyz.exelixi.utils.Utils;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static xyz.exelixi.utils.Utils.union;
 
 /**
  * Source code generation for the devices
@@ -116,6 +124,26 @@ public interface Device {
         backend().instance().clear();
     }
 
+    default void generateDeviceContainer(Path path){
+        Network network = backend().task().getNetwork();
+
+        emitter().open(path.resolve("device.cl"));
+
+        emitter().emit("#include \"../host/include/sharedconstants.h\"");
+        emitter().emit("#include \"global.h\"");
+
+        network.getInstances().forEach(instance -> {
+            emitter().emit("#include \"%s.cl\"", instance.getInstanceName());
+        });
+
+        union(resolver().getIncomings(), resolver().getOutgoings()).forEach(connection -> {
+            int id = resolver().getConnectionId(connection);
+            emitter().emit("#include \"interface_%d.cl\"", id);
+        });
+
+        emitter().close();
+    }
+
 
     /**
      * Generate the global.h file with contains all the constant definition shared by the kernels of the network
@@ -148,33 +176,24 @@ public interface Device {
             }
         }
 
-        emitter().emit("#define FIFO_DEPTH 512");
         emitter().emit("");
         emitter().emit("#endif");
         emitter().close();
     }
 
     /**
-     * Generate the AOCL launch synthesis scripts
+     * Copy the AOCL launch synthesis scripts
      *
      * @param path
      */
-    default void generateSynthesisScript(Path path) {
+    default void copySynthesisScript(Path path) {
         emitter().open(path.resolve(path.resolve("aocl_synthesis.sh")));
-        List<String> kernels = new ArrayList<>();
-        for (Instance instance : backend().task().getNetwork().getInstances()) {
-            kernels.add("device/" + instance.getInstanceName() + ".cl");
+        try (InputStream in = ClassLoader.getSystemResourceAsStream("aocl_backend_code/aocl_synthesis.sh")) {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+            reader.lines().forEach(emitter()::emitRawLine);
+        } catch (IOException e) {
+            throw CompilationException.from(e);
         }
-
-        List<Connection> borderConnections = Utils.union(resolver().getIncomings(), resolver().getOutgoings());
-        for (Connection connection : borderConnections) {
-            int id = backend().resolver().get().getConnectionId(connection);
-            kernels.add("device/interface_" + id + ".cl");
-        }
-
-        emitter().emit("#!/bin/bash");
-        emitter().emit("mkdir -p bin/emu");
-        emitter().emit("aoc -march=emulator %s -o bin/emu/device.aocx", String.join(" ", kernels));
         emitter().close();
     }
 
@@ -190,13 +209,6 @@ public interface Device {
         List<String> parameters = new ArrayList<>();
         backend().resolver().get().getIncomingsMap(name).entrySet().forEach(p -> parameters.add(code().inputPortDeclaration(p.getValue(), p.getKey())));
         backend().resolver().get().getOutgoingsMap(name).entrySet().forEach(p -> parameters.add(code().outputPortDeclaration(p.getValue(), p.getKey())));
-
-        // actor.getInputPorts().forEach(x -> parameters.add(code().inputPortDeclaration(x)));
-        // actor.getOutputPorts().forEach(x -> parameters.addAll(code().outputPortDeclaration(x)));
-
-        emitter().emit("#include \"global.h\"");
-        emitter().emit("");
-
 
         emitter().emit("__kernel void %s(%s){", name, String.join(", ", parameters));
         emitter().emit("");

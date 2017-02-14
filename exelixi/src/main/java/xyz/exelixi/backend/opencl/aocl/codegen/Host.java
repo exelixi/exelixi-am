@@ -96,6 +96,7 @@ public interface Host {
         // includes
         emitter().emit("#include \"AOCL.h\"");
         emitter().emit("#include \"utils.h\"");
+        emitter().emit("#include \"sharedconstants.h\"");
         emitter().emit("#include <stdio.h>");
         emitter().emit("#include <string.h>");
         emitter().emit("#include <chrono>");
@@ -103,7 +104,6 @@ public interface Host {
 
         // the binary name
         emitter().emit("#define BINARY_NAME \"device.aocx\"");
-        emitter().emit("#define PIPES_SIZE 512"); // FIXME should be the same used in the host global.h
         emitter().emit("");
 
         // the total number of queues used for the actors and the interfaces
@@ -245,7 +245,7 @@ public interface Host {
             Type tokenType = backend().types().declaredPortType(portDecl);
             String type = backend().code().type(tokenType);
             // now create the pipe
-            emitter().emit("cl_mem pipe_%d = clCreatePipe(context, 0, sizeof(%s), PIPES_SIZE, NULL, &status);", id, type);
+            emitter().emit("cl_mem pipe_%d = clCreatePipe(context, 0, sizeof(%s), FIFO_DEPTH, NULL, &status);", id, type);
             emitter().emit("test_error(status, \"ERROR: Failed to create the pipe %d.\\n\", &cleanup);", id);
         });
         emitter().emit("");
@@ -281,8 +281,8 @@ public interface Host {
                     // now create the buffer and the countes
                     emitter().emit("// - interface %d", id);
                     emitter().emit("// -- create shared memory");
-                    emitter().emit("interface_%d_buffer = (%s *) aligned_malloc(sizeof(%s) * PIPES_SIZE);", id, type, type);
-                    emitter().emit("cl_mem mem_interface_%d_buffer = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(%s) * PIPES_SIZE, (void *) interface_%d_buffer, &status);", id, type, id);
+                    emitter().emit("interface_%d_buffer = (%s *) aligned_malloc(sizeof(%s) * FIFO_DEPTH);", id, type, type);
+                    emitter().emit("cl_mem mem_interface_%d_buffer = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(%s) * FIFO_DEPTH, (void *) interface_%d_buffer, &status);", id, type, id);
                     emitter().emit("interface_%d_read = (int *) aligned_malloc(sizeof(int));", id);
                     emitter().emit("cl_mem mem_interface_%d_read = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int),  (void *) interface_%d_read, &status);", id, id);
                     emitter().emit("interface_%d_write = (int *) aligned_malloc(sizeof(int));", id);
@@ -452,14 +452,14 @@ public interface Host {
                     emitter().emit("if (interface_%d_readsize != -1) {", id);
                     emitter().increaseIndentation();
                     emitter().emit("int parsedTokens = 0;");
-                    emitter().emit("int rooms = (PIPES_SIZE + *interface_%d_read - *interface_%d_write - 1) %% PIPES_SIZE;", id, id);
+                    emitter().emit("int rooms = (FIFO_DEPTH + *interface_%d_read - *interface_%d_write - 1) %% FIFO_DEPTH;", id, id);
                     emitter().emit("while (rooms && (interface_%d_readsize = getline(&interface_%d_line, &interface_%d_len, interface_%d_fp)) != -1) {", id, id, id, id);
                     emitter().increaseIndentation();
                     emitter().emit("int value = parse_int(interface_%d_line, &interface_%d_read_status);", id, id); // FIXME add parsing accordig to the port type....
                     emitter().emit("");
                     emitter().emit("if (interface_%d_read_status) {", id);
                     emitter().increaseIndentation();
-                    emitter().emit("interface_%d_buffer[(*interface_%d_write + parsedTokens) %% PIPES_SIZE] = value;", id, id);
+                    emitter().emit("interface_%d_buffer[(*interface_%d_write + parsedTokens) %% FIFO_DEPTH] = value;", id, id);
                     emitter().emit("parsedTokens++;");
                     emitter().emit("rooms--;");
                     emitter().decreaseIndentation();
@@ -495,11 +495,11 @@ public interface Host {
             emitter().emit("status = clEnqueueTask(queues[QUEUE_INTERFACE_%d], kernel_interface_%d, 0, NULL, NULL);", id, id);
             emitter().emit("test_error(status, \"ERROR: Failed to launch  interface %d.\\n\", &cleanup);", id);
             emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", id);
-            emitter().emit("count = (PIPES_SIZE + *interface_%d_write - *interface_%d_read) %% PIPES_SIZE;", id, id);
+            emitter().emit("count = (FIFO_DEPTH + *interface_%d_write - *interface_%d_read) %% FIFO_DEPTH;", id, id);
             emitter().emit("if(count){");
             emitter().increaseIndentation();
             emitter().emit("printf(\"[host] Interface %d received %%d tokens\\n\", count);", id);
-            emitter().emit("*interface_%d_read = (*interface_%d_read + count) %% PIPES_SIZE;", id, id);
+            emitter().emit("*interface_%d_read = (*interface_%d_read + count) %% FIFO_DEPTH;", id, id);
             emitter().emit("time_start = Clock::now();");
             emitter().decreaseIndentation();
             emitter().emit("}");

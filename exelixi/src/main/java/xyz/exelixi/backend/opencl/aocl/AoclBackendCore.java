@@ -103,4 +103,7 @@ public interface AoclBackendCore {
     @Binding(MODULE)
     Interfaces interfaces();
 
+    @Binding(MODULE)
+    SharedConstant sharedConstants();
+
 }

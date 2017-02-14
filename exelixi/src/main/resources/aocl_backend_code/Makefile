@@ -4,7 +4,7 @@
 # for more information on installing and configuring the Intel(R) FPGA SDK for OpenCL(TM).
 
 # initialize the enviroment.....: source /opt/intelFPGA/16.1/hld/init_opencl.sh
-# run the host on emulation mode: CL_CONTEXT_EMULATOR_DEVICE_ALTERA=1 bin/host
+# run the host on emulation mode: CL_CONTEXT_EMULATOR_DEVICE_ALTERA=1 bin/emu/host
 
 #DEBUG=1
 ifeq ($(VERBOSE),1)

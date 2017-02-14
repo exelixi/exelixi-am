@@ -51,9 +51,6 @@ public interface Interfaces {
 
         backend().fileNotice().generateNotice("Interface source code");
 
-        emitter().emit("#include \"global.h\"");
-        emitter().emit("");
-
         List<String> parameters = new ArrayList<>();
         parameters.add("__global int * restrict volatile in");
         parameters.add("__global int * restrict volatile read_ptr");

@@ -124,7 +124,13 @@ public class AoclBackendPhase implements Phase {
             core.interfaces().generateOutputInterface(connection, device_srcPath);
         }
 
-         /* ========================================================================== */
+        // generate CL device container
+        core.device().generateDeviceContainer(device_srcPath);
+
+        /** copy the Synthesis script **/
+        core.device().copySynthesisScript(targetPath);
+
+        /* ========================================================================== */
         /* HOST CODE                                                                  */
         /* ========================================================================== */
 
@@ -133,9 +139,12 @@ public class AoclBackendPhase implements Phase {
 
         /** generate the Makefile **/
         core.host().copyMakeFile(targetPath);
+        
+        core.sharedConstants().generateSharedParameters(host_includePath);
 
-        /** generate the Synthesis script **/
-        core.device().generateSynthesisScript(targetPath);
+        /* ========================================================================== */
+        /* CLEAR THE BACKEND                                                          */
+        /* ========================================================================== */
 
         // clear the model resolver, we do not need it anymore
         core.resolver().clear();
