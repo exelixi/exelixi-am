@@ -245,8 +245,8 @@ public interface Testbench {
         } else {
             emitter().emit("qref_%s.push(%s_tmp);", portName, portName);
         }
-        emitter().emit("}");
         emitter().decreaseIndentation();
+        emitter().emit("}");
         emitter().decreaseIndentation();
         emitter().emit("}");
         emitter().emit("");
