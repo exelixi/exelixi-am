@@ -286,7 +286,7 @@ public interface Testbench {
             emitter().emit("// -- Output port token counters");
             for (PortDecl portDecl : outputs) {
                 String type = "uint32_t";
-                emitter().emit("%s %s_token_counter;", type, portDecl.getName());
+                emitter().emit("%s %s_token_counter = 0;", type, portDecl.getName());
             }
             emitter().emit("");
         }
