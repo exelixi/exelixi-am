@@ -68,5 +68,6 @@ public interface FileNotice {
         emitter().emit("//  -- This file is generated automatically by Exelixi AM, please do not modify");
         emitter().emit("//  -- %s", message);
         emitter().emit("//  ----------------------------------------------------------------------------");
+        emitter().emit("");
     }
 }

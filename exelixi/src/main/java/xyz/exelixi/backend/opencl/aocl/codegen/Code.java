@@ -1,10 +1,40 @@
+/*
+ * EXELIXI
+ *
+ * Copyright (C) 2017 EPFL SCI-STI-MM
+ *
+ * This file is part of EXELIXI.
+ *
+ * EXELIXI is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * EXELIXI is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with EXELIXI. If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional permission under GNU GPL version 3 section 7
+ *
+ * If you modify this Program, or any covered work, by linking or combining it
+ * with Eclipse (or a modified version of Eclipse or an Eclipse plugin or
+ * an Eclipse library), containing parts covered by the terms of the
+ * Eclipse Public License (EPL), the licensors of this Program grant you
+ * additional permission to convey the resulting work.  Corresponding Source
+ * for a non-source form of such a combination shall include the source code
+ * for the parts of Eclipse libraries used as well as that of the covered work.
+ *
+ */
 package xyz.exelixi.backend.opencl.aocl.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
 import se.lth.cs.tycho.ir.Generator;
 import se.lth.cs.tycho.ir.Port;
-import se.lth.cs.tycho.ir.decl.ClosureVarDecl;
 import se.lth.cs.tycho.ir.decl.GeneratorVarDecl;
 import se.lth.cs.tycho.ir.decl.VarDecl;
 import se.lth.cs.tycho.ir.entity.PortDecl;
@@ -23,11 +53,17 @@ import se.lth.cs.tycho.types.*;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 import xyz.exelixi.utils.Resolver;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.multij.BindingKind.MODULE;
 
+/**
+ * @author Simone Casale-Brunet
+ */
 @Module
 public interface Code {
     @Binding(MODULE)
@@ -502,54 +538,31 @@ public interface Code {
     default String evaluate(ExprApplication apply) {
         String fn = evaluate(apply.getFunction());
         List<String> parameters = new ArrayList<>();
-        parameters.add(fn + ".env");
         for (Expression parameter : apply.getArgs()) {
             parameters.add(evaluate(parameter));
         }
         String result = variables().generateTemp();
         String decl = declaration(types().type(apply), result);
-        emitter().emit("%s = %s.f(%s);", decl, fn, String.join(", ", parameters));
+        emitter().emit("%s = %s(%s);", decl, fn, String.join(", ", parameters));
         return result;
     }
 
     default String evaluate(ExprLambda lambda) {
-        backend().emitter().emit("// begin evaluate(ExprLambda)");
         String functionName = backend().callables().functionName(lambda);
-        String env = backend().callables().environmentName(lambda);
-        for (ClosureVarDecl var : lambda.getClosure()) {
-            assign(types().declaredType(var), env + "." + variables().declarationName(var), var.getValue());
-        }
-
-        Type type = backend().types().type(lambda);
-        String typeName = backend().callables().mangle(type).encode();
-        String funPtr = backend().variables().generateTemp();
-        backend().emitter().emit("%s %s = { &%s, &%s };", typeName, funPtr, functionName, env);
-
-        backend().emitter().emit("// end evaluate(ExprLambda)");
-        return funPtr;
+        return functionName;
     }
 
     default String evaluate(ExprProc proc) {
-        backend().emitter().emit("// begin evaluate(ExprProc)");
         String functionName = backend().callables().functionName(proc);
-        String env = backend().callables().environmentName(proc);
-        for (ClosureVarDecl var : proc.getClosure()) {
-            assign(types().declaredType(var), env + "." + variables().declarationName(var), var.getValue());
-        }
-
-        Type type = backend().types().type(proc);
-        String typeName = backend().callables().mangle(type).encode();
-        String funPtr = backend().variables().generateTemp();
-        backend().emitter().emit("%s %s = { &%s, &%s };", typeName, funPtr, functionName, env);
-
-        backend().emitter().emit("// end evaluate(ExprProc)");
-        return funPtr;
+        return functionName;
     }
 
     default String evaluate(ExprLet let) {
-        let.forEachChild(backend().callables()::declareEnvironmentForCallablesInScope);
         for (VarDecl decl : let.getVarDecls()) {
-            emitter().emit("%s = %s;", declaration(types().declaredType(decl), variables().declarationName(decl)), evaluate(decl.getValue()));
+            Type type = types().declaredType(decl);
+            String name = variables().declarationName(decl);
+            emitter().emit("%s;", declaration(type, name));
+            assign(type, name, decl.getValue());
         }
         return evaluate(let.getBody());
     }
@@ -641,7 +654,6 @@ public interface Code {
     default void execute(StmtBlock block) {
         emitter().emit("{");
         emitter().increaseIndentation();
-        backend().callables().declareEnvironmentForCallablesInScope(block);
         for (VarDecl decl : block.getVarDecls()) {
             Type t = types().declaredType(decl);
             String declarationName = variables().declarationName(decl);

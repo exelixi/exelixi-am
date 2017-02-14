@@ -31,17 +31,14 @@
  */
 package xyz.exelixi.backend.opencl.aocl.phases;
 
-import org.multij.MultiJ;
 import se.lth.cs.tycho.comp.CompilationTask;
 import se.lth.cs.tycho.comp.Context;
 import se.lth.cs.tycho.comp.SourceUnit;
 import se.lth.cs.tycho.ir.decl.GlobalEntityDecl;
 import se.lth.cs.tycho.ir.entity.cal.CalActor;
 import se.lth.cs.tycho.ir.network.Instance;
-import se.lth.cs.tycho.ir.network.Network;
 import se.lth.cs.tycho.phases.Phase;
 import se.lth.cs.tycho.reporting.CompilationException;
-import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 
 /**
  * Check if the network is composed only by processes

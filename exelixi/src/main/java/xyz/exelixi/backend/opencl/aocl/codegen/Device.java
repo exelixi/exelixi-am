@@ -40,9 +40,9 @@ import se.lth.cs.tycho.ir.decl.VarDecl;
 import se.lth.cs.tycho.ir.entity.Entity;
 import se.lth.cs.tycho.ir.entity.cal.CalActor;
 import se.lth.cs.tycho.ir.entity.cal.ProcessDescription;
-import se.lth.cs.tycho.ir.network.Connection;
 import se.lth.cs.tycho.ir.network.Instance;
 import se.lth.cs.tycho.ir.network.Network;
+import se.lth.cs.tycho.ir.type.FunctionTypeExpr;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.reporting.CompilationException;
@@ -50,7 +50,6 @@ import se.lth.cs.tycho.types.CallableType;
 import se.lth.cs.tycho.types.Type;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 import xyz.exelixi.utils.Resolver;
-import xyz.exelixi.utils.Utils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -74,9 +73,13 @@ public interface Device {
     @Binding
     AoclBackendCore backend();
 
-    default Resolver resolver() { return backend().resolver().get(); }
+    default Resolver resolver() {
+        return backend().resolver().get();
+    }
 
-    default Emitter emitter() { return backend().emitter(); }
+    default Emitter emitter() {
+        return backend().emitter();
+    }
 
     default Types types() {
         return backend().types();
@@ -84,6 +87,14 @@ public interface Device {
 
     default Code code() {
         return backend().code();
+    }
+
+    default Callables callables() {
+        return backend().callables();
+    }
+
+    default DefaultValues defaultValues() {
+        return backend().defaultValues();
     }
 
     /**
@@ -124,7 +135,7 @@ public interface Device {
         backend().instance().clear();
     }
 
-    default void generateDeviceContainer(Path path){
+    default void generateDeviceContainer(Path path) {
         Network network = backend().task().getNetwork();
 
         emitter().open(path.resolve("device.cl"));
@@ -176,6 +187,9 @@ public interface Device {
             }
         }
 
+        // -- Get Callables
+        callables().defineCallables();
+
         emitter().emit("");
         emitter().emit("#endif");
         emitter().close();
@@ -210,6 +224,9 @@ public interface Device {
         backend().resolver().get().getIncomingsMap(name).entrySet().forEach(p -> parameters.add(code().inputPortDeclaration(p.getValue(), p.getKey())));
         backend().resolver().get().getOutgoingsMap(name).entrySet().forEach(p -> parameters.add(code().outputPortDeclaration(p.getValue(), p.getKey())));
 
+        emitter().emit("//__attribute__((autorun))"); // FIXME should be used when altera channels will be implemented
+        emitter().emit("__attribute__((max_global_work_dim(0)))");
+        emitter().emit("__attribute__((reqd_work_group_size(1,1,1)))");
         emitter().emit("__kernel void %s(%s){", name, String.join(", ", parameters));
         emitter().emit("");
         emitter().increaseIndentation();
@@ -225,10 +242,12 @@ public interface Device {
 
     default void generateStateVariables(CalActor actor) {
         if (!actor.getVarDecls().isEmpty()) emitter().emit("// state variables");
-        for (VarDecl var : actor.getVarDecls()) {
-            String decl = code().declaration(types().declaredType(var), backend().variables().declarationName(var));
-            emitter().emit("%s;", decl);
-        }
+        actor.getVarDecls().stream().filter(var -> !(var.getType() instanceof FunctionTypeExpr)).forEach(localVar -> {
+            String decl = code().declaration(types().declaredType(localVar), backend().variables().declarationName(localVar));
+            String value = localVar.getValue() != null ? code().evaluate(localVar.getValue()) : defaultValues().defaultValue(types().declaredType(localVar));
+            emitter().emit("%s = %s;", decl, value);
+        });
+
         emitter().emit("");
     }
 
