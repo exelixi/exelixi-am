@@ -657,6 +657,7 @@ public interface Code {
     void execute(Statement stmt);
 
     default void execute(StmtConsume consume) {
+       // emitter().emit("// -- consume");
     }
 
     default void execute(StmtWrite write) {
