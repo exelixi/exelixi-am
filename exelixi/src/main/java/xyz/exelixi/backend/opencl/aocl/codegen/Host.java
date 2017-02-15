@@ -40,6 +40,7 @@ import se.lth.cs.tycho.ir.network.Network;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.reporting.CompilationException;
+import se.lth.cs.tycho.settings.Configuration;
 import se.lth.cs.tycho.types.Type;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 import xyz.exelixi.utils.Resolver;
@@ -50,6 +51,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
 
+import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.usePipes;
 import static xyz.exelixi.utils.Utils.union;
 
 /**
@@ -71,6 +73,9 @@ public interface Host {
         return backend().emitter();
     }
 
+    default Configuration configuration() {
+        return backend().context().getConfiguration();
+    }
 
     default Types types() {
         return backend().types();
@@ -236,39 +241,41 @@ public interface Host {
         );
         emitter().emit("");
 
-        // create the pipes
-        emitter().emit("// create the pipes");
-        network.getConnections().forEach(connection -> {
-            int id = resolver().getConnectionId(connection);
-            // get connection type
-            PortDecl portDecl = connection.getTarget().getInstance().isPresent() ? resolver().getTargetPortDecl(connection) : resolver().getSourcePortDecl(connection);
-            Type tokenType = backend().types().declaredPortType(portDecl);
-            String type = backend().code().type(tokenType);
-            // now create the pipe
-            emitter().emit("cl_mem pipe_%d = clCreatePipe(context, 0, sizeof(%s), FIFO_DEPTH, NULL, &status);", id, type);
-            emitter().emit("test_error(status, \"ERROR: Failed to create the pipe %d.\\n\", &cleanup);", id);
-        });
-        emitter().emit("");
+        if (configuration().get(usePipes).booleanValue()) {
+            // create the pipes
+            emitter().emit("// create the pipes");
+            network.getConnections().forEach(connection -> {
+                int id = resolver().getConnectionId(connection);
+                // get connection type
+                PortDecl portDecl = connection.getTarget().getInstance().isPresent() ? resolver().getTargetPortDecl(connection) : resolver().getSourcePortDecl(connection);
+                Type tokenType = backend().types().declaredPortType(portDecl);
+                String type = backend().code().type(tokenType);
+                // now create the pipe
+                emitter().emit("cl_mem pipe_%d = clCreatePipe(context, 0, sizeof(%s), FIFO_DEPTH, NULL, &status);", id, type);
+                emitter().emit("test_error(status, \"ERROR: Failed to create the pipe %d.\\n\", &cleanup);", id);
+            });
+            emitter().emit("");
 
-        // set actor kernels arguments
-        emitter().emit("// set actor kernels arguments");
-        network.getInstances().forEach(instance -> {
-            String name = instance.getInstanceName();
-            int arg = 0;
-            for (Connection connection : resolver().getIncomingsMap(instance.getInstanceName()).keySet()) { // input
-                int id = resolver().getConnectionId(connection);
-                emitter().emit("status = clSetKernelArg(kernel_actor_%s, %d, sizeof(cl_mem), &pipe_%d);", name, arg, id);
-                emitter().emit("test_error(status, \"ERROR: Failed to set argument %d on the kernel actor %s.\\n\", &cleanup);", arg, name);
-                arg++;
-            }
-            for (Connection connection : resolver().getOutgoingsMap(instance.getInstanceName()).keySet()) { // output
-                int id = resolver().getConnectionId(connection);
-                emitter().emit("status = clSetKernelArg(kernel_actor_%s, %d, sizeof(cl_mem), &pipe_%d);", name, arg, id);
-                emitter().emit("test_error(status, \"ERROR: Failed to set argument %d on the kernel actor %s.\\n\", &cleanup);", arg, name);
-                arg++;
-            }
-        });
-        emitter().emit("");
+            // set actor kernels arguments
+            emitter().emit("// set actor kernels arguments");
+            network.getInstances().forEach(instance -> {
+                String name = instance.getInstanceName();
+                int arg = 0;
+                for (Connection connection : resolver().getIncomingsMap(instance.getInstanceName()).keySet()) { // input
+                    int id = resolver().getConnectionId(connection);
+                    emitter().emit("status = clSetKernelArg(kernel_actor_%s, %d, sizeof(cl_mem), &pipe_%d);", name, arg, id);
+                    emitter().emit("test_error(status, \"ERROR: Failed to set argument %d on the kernel actor %s.\\n\", &cleanup);", arg, name);
+                    arg++;
+                }
+                for (Connection connection : resolver().getOutgoingsMap(instance.getInstanceName()).keySet()) { // output
+                    int id = resolver().getConnectionId(connection);
+                    emitter().emit("status = clSetKernelArg(kernel_actor_%s, %d, sizeof(cl_mem), &pipe_%d);", name, arg, id);
+                    emitter().emit("test_error(status, \"ERROR: Failed to set argument %d on the kernel actor %s.\\n\", &cleanup);", arg, name);
+                    arg++;
+                }
+            });
+            emitter().emit("");
+        }
 
         // create the interface buffers
         emitter().emit("// create the interface buffers and link to the interface kernel");
@@ -288,14 +295,18 @@ public interface Host {
                     emitter().emit("interface_%d_write = (int *) aligned_malloc(sizeof(int));", id);
                     emitter().emit("cl_mem mem_interface_%d_write = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int),  (void *) interface_%d_write, &status);", id, id);
                     emitter().emit("// -- link to the kernel");
+
                     emitter().emit("status = clSetKernelArg(kernel_interface_%d, 0, sizeof(cl_mem), &mem_interface_%d_buffer);", id, id);
                     emitter().emit("test_error(status, \"ERROR: Failed to set kernel interface_%d arg 0.\\n\", &cleanup);", id);
                     emitter().emit("status = clSetKernelArg(kernel_interface_%d, 1, sizeof(cl_mem), &mem_interface_%d_read);", id, id);
                     emitter().emit("test_error(status, \"ERROR: Failed to set kernel interface_%d arg 1.\\n\", &cleanup);", id);
                     emitter().emit("status = clSetKernelArg(kernel_interface_%d, 2, sizeof(cl_mem), &mem_interface_%d_write);", id, id);
                     emitter().emit("test_error(status, \"ERROR: Failed to set kernel interface_%d arg 2.\\n\", &cleanup);", id);
-                    emitter().emit("status = clSetKernelArg(kernel_interface_%d, 3, sizeof(cl_mem), &pipe_%d);", id, id);
-                    emitter().emit("test_error(status, \"ERROR: Failed to set kernel interface_%d arg 3.\\n\", &cleanup);", id);
+
+                    if (configuration().get(usePipes).booleanValue()) {
+                        emitter().emit("status = clSetKernelArg(kernel_interface_%d, 3, sizeof(cl_mem), &pipe_%d);", id, id);
+                        emitter().emit("test_error(status, \"ERROR: Failed to set kernel interface_%d arg 3.\\n\", &cleanup);", id);
+                    }
                 }
         );
         emitter().emit("");

@@ -46,6 +46,7 @@ import se.lth.cs.tycho.ir.type.FunctionTypeExpr;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
 import se.lth.cs.tycho.reporting.CompilationException;
+import se.lth.cs.tycho.settings.Configuration;
 import se.lth.cs.tycho.types.CallableType;
 import se.lth.cs.tycho.types.Type;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
@@ -60,6 +61,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.usePipes;
 import static xyz.exelixi.utils.Utils.union;
 
 /**
@@ -95,6 +97,10 @@ public interface Device {
 
     default DefaultValues defaultValues() {
         return backend().defaultValues();
+    }
+
+    default Configuration configuration() {
+        return backend().context().getConfiguration();
     }
 
     /**
@@ -187,7 +193,15 @@ public interface Device {
             }
         }
 
-        // -- Get Callables
+        // altera channels
+        if (!configuration().get(usePipes).booleanValue()) {
+            emitter().emit("#pragma OPENCL EXTENSION cl_altera_channels : enable");
+            backend().task().getNetwork().getConnections().forEach(connection -> {
+                emitter().emit("%s __attribute__((depth(FIFO_DEPTH)));", code().alteraChannelDefinition(connection));
+            });
+        }
+
+        // callables
         callables().defineCallables();
 
         emitter().emit("");
@@ -221,8 +235,18 @@ public interface Device {
         String name = backend().instance().get().getInstanceName();
 
         List<String> parameters = new ArrayList<>();
-        backend().resolver().get().getIncomingsMap(name).entrySet().forEach(p -> parameters.add(code().inputPortDeclaration(p.getValue(), p.getKey())));
-        backend().resolver().get().getOutgoingsMap(name).entrySet().forEach(p -> parameters.add(code().outputPortDeclaration(p.getValue(), p.getKey())));
+        if (configuration().get(usePipes).booleanValue()) {
+            backend().resolver().get().getIncomingsMap(name).entrySet().forEach(p -> {
+                String parameter = code().inputPipeDeclaration(p.getValue(), p.getKey());
+                parameters.add(parameter);
+            });
+
+            backend().resolver().get().getOutgoingsMap(name).entrySet().forEach(p -> {
+                String parameter = code().outputPipeDeclaration(p.getValue(), p.getKey());
+                parameters.add(parameter);
+            });
+        }
+
 
         emitter().emit("//__attribute__((autorun))"); // FIXME should be used when altera channels will be implemented
         emitter().emit("__attribute__((max_global_work_dim(0)))");

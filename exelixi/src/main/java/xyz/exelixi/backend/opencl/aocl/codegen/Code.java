@@ -49,6 +49,7 @@ import se.lth.cs.tycho.ir.util.ImmutableList;
 import se.lth.cs.tycho.phases.attributes.Names;
 import se.lth.cs.tycho.phases.attributes.Types;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
+import se.lth.cs.tycho.settings.Configuration;
 import se.lth.cs.tycho.types.*;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 import xyz.exelixi.utils.Resolver;
@@ -60,6 +61,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.multij.BindingKind.MODULE;
+import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.usePipes;
 
 /**
  * @author Simone Casale-Brunet
@@ -87,6 +89,10 @@ public interface Code {
 
     default Names names() {
         return backend().names();
+    }
+
+    default Configuration configuration() {
+        return backend().context().getConfiguration();
     }
 
     default String outputPortTypeSize(Port port) {
@@ -252,19 +258,33 @@ public interface Code {
 
     String type(Type type);
 
-    default String inputPortDeclaration(PortDecl portDecl, Connection connection) {
+    default String inputPipeDeclaration(PortDecl portDecl, Connection connection) {
         int id = resolver().getConnectionId(connection);
-
         String type = type(types().declaredPortType(portDecl));
         String attributes = "__attribute__((blocking)) __attribute__((depth(FIFO_DEPTH)))";
         return "read_only" + " pipe " + type + " " + attributes + " " + " FIFO_" + id;
     }
 
-    default String outputPortDeclaration(PortDecl portDecl, Connection connection) {
+    default String outputPipeDeclaration(PortDecl portDecl, Connection connection) {
         int id = resolver().getConnectionId(connection);
         String type = type(types().declaredPortType(portDecl));
         String attributes = "__attribute__((blocking)) __attribute__((depth(FIFO_DEPTH)))";
         return "write_only" + " pipe " + type + " " + attributes + " " + "FIFO_" + id;
+    }
+
+    default String alteraChannelDefinition(Connection connection) {
+        int id = resolver().getConnectionId(connection);
+
+        PortDecl portDecl = resolver().getTargetPortDecl(connection);
+        if (portDecl == null) {
+            portDecl = resolver().getSourcePortDecl(connection);
+        }
+        if (portDecl == null) {
+            throw new Error("Connection type can not be resolved");
+        }
+
+        String type = type(types().declaredPortType(portDecl));
+        return "channel " + type + " FIFO_" + id;
     }
 
 
@@ -590,7 +610,12 @@ public interface Code {
         if (read.getRepeatExpression() == null) {
             String portType = type(types().portType(read.getPort()));
             for (LValue lvalue : read.getLValues()) {
-                emitter().emit("read_pipe(%s, &%s);", fifoName, lvalue(lvalue));
+                String value = lvalue(lvalue);
+                if (configuration().get(usePipes).booleanValue()) {
+                    emitter().emit("read_pipe(%s, &%s);", fifoName, value);
+                } else {
+                    emitter().emit("%s = read_channel_altera(%s);", value, fifoName);
+                }
             }
         } else if (read.getLValues().size() == 1) {
             String portType = type(types().portType(read.getPort()));
@@ -599,7 +624,11 @@ public interface Code {
             String temp = variables().generateTemp();
             emitter().emit("for (int %1$s = 0; %1$s < %2$s; %1$s++) {", temp, repeat);
             emitter().increaseIndentation();
-            emitter().emit("read_pipe(%s, &%s[%s]);", fifoName, value, temp);
+            if (configuration().get(usePipes).booleanValue()) {
+                emitter().emit("read_pipe(%s, &%s[%s]);", fifoName, value, temp);
+            } else {
+                emitter().emit("%s[%s] = read_channel_altera(%s);", value, temp, fifoName);
+            }
             emitter().decreaseIndentation();
             emitter().emit("}");
         } else {
@@ -621,7 +650,11 @@ public interface Code {
             String portType = type(types().portType(write.getPort()));
             for (Expression expr : write.getValues()) {
                 fifoNames.forEach(fifo -> {
-                    emitter().emit("write_pipe(%s, &%s);", fifo, evaluate(expr));
+                    if (configuration().get(usePipes).booleanValue()) {
+                        emitter().emit("write_pipe(%s, &%s);", fifo, evaluate(expr));
+                    } else {
+                        emitter().emit("write_channel_altera(%s, %s);", fifo, evaluate(expr));
+                    }
                 });
 
             }
@@ -634,7 +667,11 @@ public interface Code {
             emitter().emit("for (int %1$s = 0; %1$s < %2$s; %1$s++) {", temp, repeat);
             emitter().increaseIndentation();
             for (String fifo : fifoNames) {
-                emitter().emit("write_pipe(%s, &%s[%s]);", fifo, value, temp);
+                if (configuration().get(usePipes).booleanValue()) {
+                    emitter().emit("write_pipe(%s, &%s[%s]);", fifo, value, temp);
+                } else {
+                    emitter().emit("write_channel_altera(%s, %s[%s]);", fifo, value, temp);
+                }
             }
             emitter().decreaseIndentation();
             emitter().emit("}");

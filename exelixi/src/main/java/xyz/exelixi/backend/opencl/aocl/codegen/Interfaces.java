@@ -33,20 +33,20 @@ package xyz.exelixi.backend.opencl.aocl.codegen;
 
 import org.multij.Binding;
 import org.multij.Module;
-import se.lth.cs.tycho.ir.entity.PortDecl;
 import se.lth.cs.tycho.ir.network.Connection;
 import se.lth.cs.tycho.phases.cbackend.Emitter;
+import se.lth.cs.tycho.settings.Configuration;
 import se.lth.cs.tycho.types.Type;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 import xyz.exelixi.utils.Resolver;
-
-import static java.lang.String.format;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import static java.lang.String.format;
 import static org.multij.BindingKind.MODULE;
+import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.usePipes;
 
 /**
  * @author Simone Casale-Brunet
@@ -57,10 +57,16 @@ public interface Interfaces {
     @Binding(MODULE)
     AoclBackendCore backend();
 
-    default Resolver resolver() { return backend().resolver().get(); }
+    default Resolver resolver() {
+        return backend().resolver().get();
+    }
 
     default Emitter emitter() {
         return backend().emitter();
+    }
+
+    default Configuration configuration() {
+        return backend().context().getConfiguration();
     }
 
     default void generateInputInterface(Connection connection, Path path) {
@@ -86,7 +92,9 @@ public interface Interfaces {
         parameters.add("__global int * restrict volatile in");
         parameters.add("__global int * restrict volatile read_ptr");
         parameters.add("__global int * restrict volatile write_ptr");
-        parameters.add(format("write_only pipe %s __attribute__((blocking)) __attribute__((depth(FIFO_DEPTH))) FIFO_%d", type, id));
+        if (configuration().get(usePipes).booleanValue()) {
+            parameters.add(format("write_only pipe %s __attribute__((blocking)) __attribute__((depth(FIFO_DEPTH))) FIFO_%d", type, id));
+        }
 
         // kernel definition with attributes
         emitter().emit("__attribute__((max_global_work_dim(0)))");
@@ -105,7 +113,11 @@ public interface Interfaces {
         emitter().emit("for (int i = 0; i < count; ++i) {");
         emitter().increaseIndentation();
         emitter().emit("%s value = in[(i + tmp_read) %% FIFO_DEPTH];", type);
-        emitter().emit("write_pipe(FIFO_%d, &value);", id);
+        if (configuration().get(usePipes).booleanValue()) {
+            emitter().emit("write_pipe(FIFO_%d, &value);", id);
+        } else {
+            emitter().emit("write_channel_altera(FIFO_%d, value);", id);
+        }
         emitter().decreaseIndentation();
         emitter().emit("}");
         emitter().emit("");
@@ -146,7 +158,9 @@ public interface Interfaces {
         parameters.add("__global int * volatile restrict out");
         parameters.add("__global int * volatile restrict read_ptr");
         parameters.add("__global int * volatile restrict write_ptr");
-        parameters.add(format("read_only pipe %s __attribute__((depth(FIFO_DEPTH))) FIFO_%d", type, fifoId));
+        if (configuration().get(usePipes).booleanValue()) {
+            parameters.add(format("read_only pipe %s __attribute__((depth(FIFO_DEPTH))) FIFO_%d", type, fifoId));
+        }
         emitter().emit("__kernel void %s(%s){", name, String.join(", ", parameters));
         emitter().emit("");
         emitter().increaseIndentation();
@@ -154,32 +168,64 @@ public interface Interfaces {
         emitter().emit("int tmp_read  = *read_ptr;");
         emitter().emit("int tmp_write = *write_ptr;");
         emitter().emit("int count = 0;");
-        emitter().emit("%s value;", type); //FIXME initialize the variable
+        emitter().emit("%s value = %s;", type, backend().defaultValues().defaultValue(tokenType));
         emitter().emit("");
 
         emitter().emit("int rooms = (FIFO_DEPTH + tmp_read - tmp_write - 1) %% FIFO_DEPTH;");
         emitter().emit("");
 
-        emitter().emit("if(rooms) {");
-        emitter().emit("");
-        emitter().increaseIndentation();
-        emitter().emit("while(rooms && (read_pipe(FIFO_%d, &value)>=0)){", fifoId);
-        emitter().increaseIndentation();
-        emitter().emit("out[(tmp_write + count) %% FIFO_DEPTH] = value;");
-        emitter().emit("count++;");
-        emitter().emit("rooms--;");
-        emitter().decreaseIndentation();
-        emitter().emit("}");
-        emitter().emit("");
-        emitter().emit("if(count){");
-        emitter().increaseIndentation();
-        emitter().emit("*write_ptr = (tmp_write + count) %% FIFO_DEPTH;");
-        emitter().decreaseIndentation();
-        emitter().emit("}");
-        emitter().emit("");
-        emitter().decreaseIndentation();
-        emitter().emit("}");
-        emitter().emit("");
+        if (configuration().get(usePipes).booleanValue()) {
+            emitter().emit("if(rooms) {");
+            emitter().emit("");
+            emitter().increaseIndentation();
+            emitter().emit("while(rooms && (read_pipe(FIFO_%d, &value)>=0)){", fifoId);
+
+            emitter().increaseIndentation();
+            emitter().emit("out[(tmp_write + count) %% FIFO_DEPTH] = value;");
+            emitter().emit("count++;");
+            emitter().emit("rooms--;");
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+            emitter().emit("");
+            emitter().emit("if(count){");
+            emitter().increaseIndentation();
+            emitter().emit("*write_ptr = (tmp_write + count) %% FIFO_DEPTH;");
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+            emitter().emit("");
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+            emitter().emit("");
+        }else{
+            emitter().emit("while(rooms) {");
+            emitter().increaseIndentation();
+
+            emitter().emit("bool valid = false;");
+            emitter().emit("value = read_channel_nb_altera(FIFO_1, &valid);");
+
+            emitter().emit("if(valid){");
+            emitter().increaseIndentation();
+            emitter().emit("out[(tmp_write + count) %% FIFO_DEPTH] = value;");
+            emitter().emit("count++;");
+            emitter().emit("rooms--;");
+            emitter().decreaseIndentation();
+            emitter().emit("}else{");
+            emitter().increaseIndentation();
+            emitter().emit("rooms = 0;");
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+
+            emitter().emit("");
+
+            emitter().emit("if(count){");
+            emitter().increaseIndentation();
+            emitter().emit("*write_ptr = (tmp_write + count) %% FIFO_DEPTH;");
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+        }
 
         emitter().decreaseIndentation();
         emitter().emit("}");
