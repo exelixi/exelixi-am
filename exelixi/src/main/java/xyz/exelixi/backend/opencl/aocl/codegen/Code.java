@@ -337,7 +337,7 @@ public interface Code {
     }
 
     default String evaluate(ExprDeref deref) {
-        return "(*" + evaluate(deref.getReference()) + ")";
+        return evaluate(deref.getReference());
     }
 
     default String evaluate(ExprGlobalVariable variable) {

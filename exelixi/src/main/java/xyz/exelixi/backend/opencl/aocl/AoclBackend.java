@@ -83,10 +83,10 @@ public class AoclBackend extends ExelixiBackend {
         addPhase(ElaborateNetworkPhase);
         addPhase(DeadDeclEliminationPhase);
         addPhase(ComputeClosuresPhase);
+        addPhase(CloneTreePhase);
 
         // conformancy test
         addPhase(new AoclNetworkConformancy());
-       // addPhase(new RenamePortsPhase()); //FIXME tobe removed: now it is done "indirectly" by using the Resolver during code generation
 
         // Actor transformations
         addPhase(RenameActorVariablesPhase);

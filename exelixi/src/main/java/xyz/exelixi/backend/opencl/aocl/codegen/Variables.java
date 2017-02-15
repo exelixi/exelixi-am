@@ -96,7 +96,8 @@ public interface Variables {
         VarDecl decl = backend().names().declaration(var);
         IRNode parent = backend().tree().parent(decl);
         if (decl instanceof ClosureVarDecl) {
-            return declarationName(decl);
+            Variable cVar = ((ExprRef) decl.getValue()).getVariable();
+            return "f_" + cVar.getName();
         } else if (parent instanceof Scope || parent instanceof ActorMachine) {
             return declarationName(decl);
         } else {

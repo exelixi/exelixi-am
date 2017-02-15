@@ -196,9 +196,11 @@ public interface Device {
         // altera channels
         if (!configuration().get(usePipes).booleanValue()) {
             emitter().emit("#pragma OPENCL EXTENSION cl_altera_channels : enable");
+            emitter().emit("");
             backend().task().getNetwork().getConnections().forEach(connection -> {
                 emitter().emit("%s __attribute__((depth(FIFO_DEPTH)));", code().alteraChannelDefinition(connection));
             });
+            emitter().emit("");
         }
 
         // callables
