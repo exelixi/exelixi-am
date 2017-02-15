@@ -52,6 +52,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Path;
 
 import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.usePipes;
+import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.profile;
 import static xyz.exelixi.utils.Utils.union;
 
 /**
@@ -101,10 +102,10 @@ public interface Host {
         // includes
         emitter().emit("#include \"AOCL.h\"");
         emitter().emit("#include \"utils.h\"");
-        emitter().emit("#include \"sharedconstants.h\"");
         emitter().emit("#include <stdio.h>");
         emitter().emit("#include <string.h>");
         emitter().emit("#include <chrono>");
+        emitter().emit("#include \"sharedconstants.h\"");
         emitter().emit("");
 
         // the binary name
@@ -147,6 +148,12 @@ public interface Host {
             emitter().emit("cl_kernel kernel_interface_%d = NULL;", id);
         });
         emitter().emit("");
+
+        /* ================== EVENTS VARIABLES ==================*/
+        if(configuration().get(profile).booleanValue()){
+            emitter().emit("cl_event global_event;");
+            emitter().emit("");
+        }
 
         // the interfaces values
         union(resolver().getIncomings(), resolver().getOutgoings()).forEach(connection -> {
@@ -312,14 +319,20 @@ public interface Host {
         emitter().emit("");
 
         // print notice init ok
-        emitter().emit("printf(\"\\nKernels initialization is complete.\\n\");");
+        emitter().emit("printf(\"Kernels initialization is complete.\\n\");");
         emitter().emit("printf(\"Launching the kernels...\\n\");");
+
+        if(configuration().get(profile).booleanValue()){
+            emitter().emit("printf(\"(execution profiling is enabled)\\n\");");
+        }
+
         emitter().emit("");
 
         emitter().emit("// launch the actor kernels");
         network.getInstances().forEach(instance -> {
             String name = instance.getInstanceName();
-            emitter().emit("status = clEnqueueTask(queues[QUEUE_ACTOR_%s], kernel_actor_%s, 0, NULL, NULL);", name, name);
+            String event = configuration().get(profile).booleanValue() ? "&global_event" : "NULL";
+            emitter().emit("status = clEnqueueTask(queues[QUEUE_ACTOR_%s], kernel_actor_%s, 0, NULL, %s);", name, name, event);
             emitter().emit("test_error(status, \"ERROR: Failed to launch kernel %s\", &cleanup);", name);
         });
         emitter().emit("");
@@ -451,10 +464,21 @@ public interface Host {
         emitter().emit("}");
         emitter().emit("");
 
+        emitter().emit("// temporary variables");
+        emitter().emit("int tmp_read, tmp_write;");
+        emitter().emit("");
+
         emitter().emit("// schedule the interface");
         emitter().emit("Clock::time_point time_start = Clock::now(); // timeout timer");
         emitter().emit("do{");
         emitter().increaseIndentation();
+
+        // profiling
+        if(configuration().get(profile).booleanValue()){
+            emitter().emit("// collect profiling data");
+            emitter().emit("clGetProfileInfoAltera(global_event);");
+            emitter().emit("");
+        }
 
         // parse input files
         emitter().emit("// parse input files");
@@ -463,14 +487,16 @@ public interface Host {
                     emitter().emit("if (interface_%d_readsize != -1) {", id);
                     emitter().increaseIndentation();
                     emitter().emit("int parsedTokens = 0;");
-                    emitter().emit("int rooms = (FIFO_DEPTH + *interface_%d_read - *interface_%d_write - 1) %% FIFO_DEPTH;", id, id);
+                    emitter().emit("tmp_read  = *interface_%d_read;",id);
+                    emitter().emit("tmp_write = *interface_%d_write;", id);
+                    emitter().emit("int rooms = (FIFO_DEPTH + tmp_read - tmp_write - 1) %% FIFO_DEPTH;");
                     emitter().emit("while (rooms && (interface_%d_readsize = getline(&interface_%d_line, &interface_%d_len, interface_%d_fp)) != -1) {", id, id, id, id);
                     emitter().increaseIndentation();
                     emitter().emit("int value = parse_int(interface_%d_line, &interface_%d_read_status);", id, id); // FIXME add parsing accordig to the port type....
                     emitter().emit("");
                     emitter().emit("if (interface_%d_read_status) {", id);
                     emitter().increaseIndentation();
-                    emitter().emit("interface_%d_buffer[(*interface_%d_write + parsedTokens) %% FIFO_DEPTH] = value;", id, id);
+                    emitter().emit("interface_%d_buffer[(tmp_write + parsedTokens) %% FIFO_DEPTH] = value;", id, id);
                     emitter().emit("parsedTokens++;");
                     emitter().emit("rooms--;");
                     emitter().decreaseIndentation();
@@ -485,7 +511,7 @@ public interface Host {
                     emitter().emit("}"); // end while rooms
                     emitter().emit("if (parsedTokens) {");
                     emitter().increaseIndentation();
-                    emitter().emit("*interface_%d_write += parsedTokens;", id);
+                    emitter().emit("*interface_%d_write = (tmp_write + parsedTokens) %% FIFO_DEPTH;", id);
                     emitter().emit("cl_int status = clEnqueueTask(queues[QUEUE_INTERFACE_%d], kernel_interface_%d, 0, NULL, NULL);", id, id);
                     emitter().emit("test_error(status, \"ERROR: Failed to launch interface %d kernel.\\n\", &cleanup);", id);
                     emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", id);

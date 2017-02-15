@@ -42,7 +42,6 @@ import se.lth.cs.tycho.reporting.CompilationException;
 import se.lth.cs.tycho.settings.Configuration;
 import se.lth.cs.tycho.settings.OnOffSetting;
 import se.lth.cs.tycho.settings.Setting;
-import se.lth.cs.tycho.settings.StringSetting;
 import xyz.exelixi.Settings;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
 import xyz.exelixi.utils.Resolver;
@@ -50,7 +49,7 @@ import xyz.exelixi.utils.Utils;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -59,13 +58,28 @@ import java.util.List;
 public class AoclBackendPhase implements Phase {
 
     /**
-     * Altera Channels (default) of OpenCL Pipes
+     * Altera Channels (default) or OpenCL Pipes
      */
     public static final Setting<Boolean> usePipes = new OnOffSetting() {
         @Override public String getKey() { return "aocl-pipes"; }
         @Override public String getDescription() { return "Use OpenCL pipes instead of Altera Channels"; }
         @Override public Boolean defaultValue(Configuration configuration) { return false; }
     };
+
+    /**
+     * Profiled execution
+     */
+    public static final Setting<Boolean> profile = new OnOffSetting() {
+        @Override public String getKey() { return "aocl-profile"; }
+        @Override public String getDescription() { return "Profile the program execution"; }
+        @Override public Boolean defaultValue(Configuration configuration) { return false; }
+    };
+
+    private static List<Setting<?>> settings = new ArrayList<>();
+    static {
+        settings.add(usePipes);
+        settings.add(profile);
+    }
 
     /**
      * Device source path
@@ -171,7 +185,7 @@ public class AoclBackendPhase implements Phase {
 
     @Override
     public List<Setting<?>> getPhaseSettings() {
-        return Collections.singletonList(usePipes);
+        return settings;
     }
 
 }

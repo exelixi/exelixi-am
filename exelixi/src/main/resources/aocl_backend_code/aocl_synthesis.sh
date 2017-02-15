@@ -25,7 +25,7 @@ done
 
 # print help if required
 if [ -n "$HELP" ]; then
-echo "$0 [-march=<value>] [-board=<value>]"
+echo "$00 [-march=<value>] [-board=<value>]"
 echo ""
 echo "   if no march is specified, the AOCL emulator will be used"
 echo "   usage example: $0 -board=de1soc_sharedonly"
@@ -43,7 +43,7 @@ BINPATH=bin/emu
 else
 
 	if [ -n "$BOARD" ]; then
-		CONFIG=$CONFIG" --board=$BOARD"
+		CONFIG=$CONFIG" --board $BOARD"
 	fi
 
 	if [ -n "$MARCH" ]; then
@@ -58,10 +58,10 @@ fi
 # LAUNCH AOCL
 #=================================================================================
 
-echo "configuration: $CONFIG device/device.cl -o $BINPATH/device.aocx"
+echo "configuration: -o $BINPATH/device.aocx device/device.cl $CONFIG"
 echo "start........: $(date -R)"
 
 mkdir -p $BINPATH
-aoc $CONFIG device/device.cl -o $BINPATH/device.aocx
+aoc -o $BINPATH/device.aocx device/device.cl $CONFIG
 
 echo "end..........: $(date -R)"
