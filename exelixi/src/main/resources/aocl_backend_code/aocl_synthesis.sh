@@ -1,11 +1,5 @@
 #!/bin/bash
 #=================================================================================
-# DEFAULT VALUES
-#=================================================================================
-
-MARCH=emulator
-
-#=================================================================================
 # PARSING
 #=================================================================================
 for i in "$@"
@@ -13,11 +7,15 @@ do
 case $i in
     -march=*)
     MARCH="${i#*=}"
-    shift # past argument=value
+    shift
+    ;;
+    -board=*)
+    BOARD="${i#*=}"
+    shift
     ;;
     -h*|-help*)
     HELP=YES
-    shift # past argument with no value
+    shift
     ;;
     *)
     # unknown option
@@ -26,17 +24,44 @@ esac
 done
 
 # print help if required
-if [ -n "$HELP" ]; then 
-echo "$0 [-march=<value>]"
+if [ -n "$HELP" ]; then
+echo "$0 [-march=<value>] [-board=<value>]"
 echo ""
-echo "if no march is specified, the AOCL emulator will be used"
+echo "   if no march is specified, the AOCL emulator will be used"
+echo "   usage example: $0 -board=de1soc_sharedonly"
 exit;
 fi
 
 
 #=================================================================================
+# BUILD CONFIGURATION
+#=================================================================================
+
+if [ -z "$BOARD" ] && [ -z "$MARCH" ]; then
+CONFIG="-march=emulator"
+BINPATH=bin/emu
+else
+
+	if [ -n "$BOARD" ]; then
+		CONFIG=$CONFIG" --board=$BOARD"
+	fi
+
+	if [ -n "$MARCH" ]; then
+		CONFIG=$CONFIG" -march=$MARCH"
+	fi
+
+	BINPATH=bin/arm
+
+fi
+
+#=================================================================================
 # LAUNCH AOCL
 #=================================================================================
 
-mkdir -p bin/emu
-aoc -march=$MARCH device/device.cl -o bin/emu/device.aocx
+echo "configuration: $CONFIG device/device.cl -o $BINPATH/device.aocx"
+echo "start........: $(date -R)"
+
+mkdir -p $BINPATH
+aoc $CONFIG device/device.cl -o $BINPATH/device.aocx
+
+echo "end..........: $(date -R)"

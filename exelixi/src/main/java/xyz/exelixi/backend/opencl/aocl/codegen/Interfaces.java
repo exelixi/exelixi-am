@@ -201,7 +201,7 @@ public interface Interfaces {
             emitter().increaseIndentation();
 
             emitter().emit("bool valid = false;");
-            emitter().emit("value = read_channel_nb_altera(FIFO_1, &valid);");
+            emitter().emit("value = read_channel_nb_altera(FIFO_%d, &valid);", fifoId);
 
             emitter().emit("if(valid){");
             emitter().increaseIndentation();
