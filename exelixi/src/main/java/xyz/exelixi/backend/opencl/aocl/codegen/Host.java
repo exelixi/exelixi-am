@@ -150,8 +150,10 @@ public interface Host {
         emitter().emit("");
 
         /* ================== EVENTS VARIABLES ==================*/
-        if(configuration().get(profile).booleanValue()){
-            emitter().emit("cl_event global_event;");
+        if (configuration().get(profile).booleanValue()) {
+            network.getInstances().forEach(instance -> {
+                emitter().emit("cl_event event_%s;", instance.getInstanceName());
+            });
             emitter().emit("");
         }
 
@@ -322,7 +324,7 @@ public interface Host {
         emitter().emit("printf(\"Kernels initialization is complete.\\n\");");
         emitter().emit("printf(\"Launching the kernels...\\n\");");
 
-        if(configuration().get(profile).booleanValue()){
+        if (configuration().get(profile).booleanValue()) {
             emitter().emit("printf(\"(execution profiling is enabled)\\n\");");
         }
 
@@ -331,7 +333,7 @@ public interface Host {
         emitter().emit("// launch the actor kernels");
         network.getInstances().forEach(instance -> {
             String name = instance.getInstanceName();
-            String event = configuration().get(profile).booleanValue() ? "&global_event" : "NULL";
+            String event = configuration().get(profile).booleanValue() ? "&event_" + name : "NULL";
             emitter().emit("status = clEnqueueTask(queues[QUEUE_ACTOR_%s], kernel_actor_%s, 0, NULL, %s);", name, name, event);
             emitter().emit("test_error(status, \"ERROR: Failed to launch kernel %s\", &cleanup);", name);
         });
@@ -474,9 +476,11 @@ public interface Host {
         emitter().increaseIndentation();
 
         // profiling
-        if(configuration().get(profile).booleanValue()){
+        if (configuration().get(profile).booleanValue()) {
             emitter().emit("// collect profiling data");
-            emitter().emit("clGetProfileInfoAltera(global_event);");
+            backend().task().getNetwork().getInstances().forEach(instance -> {
+                emitter().emit("clGetProfileInfoAltera(event_%s);", instance.getInstanceName());
+            });
             emitter().emit("");
         }
 
@@ -487,7 +491,7 @@ public interface Host {
                     emitter().emit("if (interface_%d_readsize != -1) {", id);
                     emitter().increaseIndentation();
                     emitter().emit("int parsedTokens = 0;");
-                    emitter().emit("tmp_read  = *interface_%d_read;",id);
+                    emitter().emit("tmp_read  = *interface_%d_read;", id);
                     emitter().emit("tmp_write = *interface_%d_write;", id);
                     emitter().emit("int rooms = (FIFO_DEPTH + tmp_read - tmp_write - 1) %% FIFO_DEPTH;");
                     emitter().emit("while (rooms && (interface_%d_readsize = getline(&interface_%d_line, &interface_%d_len, interface_%d_fp)) != -1) {", id, id, id, id);
