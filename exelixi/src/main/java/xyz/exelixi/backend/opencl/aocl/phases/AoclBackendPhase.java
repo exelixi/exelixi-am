@@ -75,10 +75,21 @@ public class AoclBackendPhase implements Phase {
         @Override public Boolean defaultValue(Configuration configuration) { return false; }
     };
 
+
+    /**
+     * Intel SoCs optimizations
+     */
+    public static final Setting<Boolean> intelOpt = new OnOffSetting() {
+        @Override public String getKey() { return "aocl-opt"; }
+        @Override public String getDescription() { return "Optimize the generated code for Intel SoCs"; }
+        @Override public Boolean defaultValue(Configuration configuration) { return true; }
+    };
+
     private static List<Setting<?>> settings = new ArrayList<>();
     static {
         settings.add(usePipes);
         settings.add(profile);
+        settings.add(intelOpt);
     }
 
     /**

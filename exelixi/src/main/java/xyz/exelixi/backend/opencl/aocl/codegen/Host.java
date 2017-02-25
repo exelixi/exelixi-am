@@ -53,6 +53,7 @@ import java.nio.file.Path;
 
 import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.usePipes;
 import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.profile;
+import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.intelOpt;
 import static xyz.exelixi.utils.Utils.union;
 
 /**
@@ -296,15 +297,25 @@ public interface Host {
                     String type = backend().code().type(tokenType);
                     // now create the buffer and the countes
                     emitter().emit("// - interface %d", id);
-                    emitter().emit("// -- create shared memory");
-                    emitter().emit("interface_%d_buffer = (%s *) aligned_malloc(sizeof(%s) * FIFO_DEPTH);", id, type, type);
-                    emitter().emit("cl_mem mem_interface_%d_buffer = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(%s) * FIFO_DEPTH, (void *) interface_%d_buffer, &status);", id, type, id);
-                    emitter().emit("interface_%d_read = (int *) aligned_malloc(sizeof(int));", id);
-                    emitter().emit("cl_mem mem_interface_%d_read = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int),  (void *) interface_%d_read, &status);", id, id);
-                    emitter().emit("interface_%d_write = (int *) aligned_malloc(sizeof(int));", id);
-                    emitter().emit("cl_mem mem_interface_%d_write = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int),  (void *) interface_%d_write, &status);", id, id);
-                    emitter().emit("// -- link to the kernel");
+                    emitter().emit("// -- create shared memory among host and device");
 
+                    if(configuration().get(intelOpt).booleanValue()){ // see UG-OCL002 (v. 2016-10-31), page 87
+                        emitter().emit("cl_mem mem_interface_%d_buffer = clCreateBuffer(context, CL_MEM_ALLOC_HOST_PTR, sizeof(%s) * FIFO_DEPTH, NULL, &status);", id, type);
+                        emitter().emit("interface_%d_buffer = (%s *) clEnqueueMapBuffer(queues[QUEUE_INTERFACE_%d], mem_interface_%d_buffer, true, CL_MAP_READ | CL_MAP_WRITE, 0, sizeof(%s) * FIFO_DEPTH, 0, NULL, NULL, &status);", id, type, id, id, type);
+                        emitter().emit("cl_mem mem_interface_%d_read = clCreateBuffer(context, CL_MEM_ALLOC_HOST_PTR, sizeof(int), NULL, &status);", id);
+                        emitter().emit("interface_%d_read = (int *) clEnqueueMapBuffer(queues[QUEUE_INTERFACE_%d], mem_interface_%d_read, true, CL_MAP_READ | CL_MAP_WRITE, 0, sizeof(int), 0, NULL, NULL, &status);", id, id, id);
+                        emitter().emit("cl_mem mem_interface_%d_write  = clCreateBuffer(context, CL_MEM_ALLOC_HOST_PTR, sizeof(int), NULL, &status);", id);
+                        emitter().emit("interface_%d_write = (int *) clEnqueueMapBuffer(queues[QUEUE_INTERFACE_%d], mem_interface_%d_write, true, CL_MAP_READ | CL_MAP_WRITE, 0, sizeof(int), 0, NULL, NULL, &status);", id, id, id);
+                    }else {
+                        emitter().emit("interface_%d_buffer = (%s *) aligned_malloc(sizeof(%s) * FIFO_DEPTH);", id, type, type);
+                        emitter().emit("cl_mem mem_interface_%d_buffer = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(%s) * FIFO_DEPTH, (void *) interface_%d_buffer, &status);", id, type, id);
+                        emitter().emit("interface_%d_read = (int *) aligned_malloc(sizeof(int));", id);
+                        emitter().emit("cl_mem mem_interface_%d_read = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int),  (void *) interface_%d_read, &status);", id, id);
+                        emitter().emit("interface_%d_write = (int *) aligned_malloc(sizeof(int));", id);
+                        emitter().emit("cl_mem mem_interface_%d_write = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(int),  (void *) interface_%d_write, &status);", id, id);
+                    }
+
+                    emitter().emit("// -- link to the kernel");
                     emitter().emit("status = clSetKernelArg(kernel_interface_%d, 0, sizeof(cl_mem), &mem_interface_%d_buffer);", id, id);
                     emitter().emit("test_error(status, \"ERROR: Failed to set kernel interface_%d arg 0.\\n\", &cleanup);", id);
                     emitter().emit("status = clSetKernelArg(kernel_interface_%d, 1, sizeof(cl_mem), &mem_interface_%d_read);", id, id);
