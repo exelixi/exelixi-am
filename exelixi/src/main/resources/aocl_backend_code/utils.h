@@ -29,12 +29,26 @@ char * trim(const char * s) {
 
 /**
  * Parse an int from a string.
- * Status can be 0 (error) or 1 (parsing without errors)
+ * Return 0 (error) or 1 (parsing without errors)
  */
-int parse_int(const char *s, int *status) {
+int parse_int(const char *s, int *value) {
 	s = trim(s);
-	*status = strlen(s) ? 1 : 0;
-	return strtol(s, NULL, 0);
+	*value = strtol(s, NULL, 0);
+	return strlen(s) ? 1 : 0;
+}
+
+/**
+ * Read an integer value from a file
+ * Return 0 (error) or 1 (parsing without errors)
+ */
+int read_int_value(FILE* fp, int *value) {
+	char * line;
+	size_t len = 0;
+	if (getline(&line, &len, fp) != -1) {
+		return parse_int(line, value);
+	} else {
+		return 0;
+	}
 }
 
 #endif /* HOST_INCLUDE_UTILS_H_ */

@@ -299,14 +299,14 @@ public interface Host {
                     emitter().emit("// - interface %d", id);
                     emitter().emit("// -- create shared memory among host and device");
 
-                    if(configuration().get(intelOpt).booleanValue()){ // see UG-OCL002 (v. 2016-10-31), page 87
+                    if (configuration().get(intelOpt).booleanValue()) { // see UG-OCL002 (v. 2016-10-31), page 87
                         emitter().emit("cl_mem mem_interface_%d_buffer = clCreateBuffer(context, CL_MEM_ALLOC_HOST_PTR, sizeof(%s) * FIFO_DEPTH, NULL, &status);", id, type);
                         emitter().emit("interface_%d_buffer = (%s *) clEnqueueMapBuffer(queues[QUEUE_INTERFACE_%d], mem_interface_%d_buffer, true, CL_MAP_READ | CL_MAP_WRITE, 0, sizeof(%s) * FIFO_DEPTH, 0, NULL, NULL, &status);", id, type, id, id, type);
                         emitter().emit("cl_mem mem_interface_%d_read = clCreateBuffer(context, CL_MEM_ALLOC_HOST_PTR, sizeof(int), NULL, &status);", id);
                         emitter().emit("interface_%d_read = (int *) clEnqueueMapBuffer(queues[QUEUE_INTERFACE_%d], mem_interface_%d_read, true, CL_MAP_READ | CL_MAP_WRITE, 0, sizeof(int), 0, NULL, NULL, &status);", id, id, id);
                         emitter().emit("cl_mem mem_interface_%d_write  = clCreateBuffer(context, CL_MEM_ALLOC_HOST_PTR, sizeof(int), NULL, &status);", id);
                         emitter().emit("interface_%d_write = (int *) clEnqueueMapBuffer(queues[QUEUE_INTERFACE_%d], mem_interface_%d_write, true, CL_MAP_READ | CL_MAP_WRITE, 0, sizeof(int), 0, NULL, NULL, &status);", id, id, id);
-                    }else {
+                    } else {
                         emitter().emit("interface_%d_buffer = (%s *) aligned_malloc(sizeof(%s) * FIFO_DEPTH);", id, type, type);
                         emitter().emit("cl_mem mem_interface_%d_buffer = clCreateBuffer(context, CL_MEM_USE_HOST_PTR, sizeof(%s) * FIFO_DEPTH, (void *) interface_%d_buffer, &status);", id, type, id);
                         emitter().emit("interface_%d_read = (int *) aligned_malloc(sizeof(int));", id);
@@ -433,20 +433,35 @@ public interface Host {
         emitter().emit("void schedule_host(){");
         emitter().increaseIndentation();
 
+        // used to check if all input files are availables
+        emitter().emit("// check if all input files are availables");
+        emitter().emit("bool input_files_available = true;");
+        emitter().emit("");
+
         // initialize the interfaces variables
         resolver().getIncomings().forEach(connection -> {
+            // get the id
             int id = resolver().getConnectionId(connection);
+            // get the type
+            PortDecl portDecl = connection.getTarget().getInstance().isPresent() ? resolver().getTargetPortDecl(connection) : resolver().getSourcePortDecl(connection);
+            Type tokenType = backend().types().declaredPortType(portDecl);
+            String type = backend().code().type(tokenType);
+
             emitter().emit("// input interface %d", id);
-            emitter().emit("FILE *interface_%d_fp;", id);
-            emitter().emit("interface_%d_fp = fopen(\"%s.txt\", \"r\");", id, connection.getSource().getPort()); //FIXME check if file is not null
-            emitter().emit("char * interface_%d_line;", id);
-            emitter().emit("size_t interface_%d_len = 0;", id);
-            emitter().emit("ssize_t interface_%d_readsize = 0;", id);
-            emitter().emit("int interface_%d_read_status = 0;", id);
+            emitter().emit("FILE *interface_%d_fp = fopen(\"%s.txt\", \"r\");", id, connection.getSource().getPort());
+            emitter().emit("%s interface_%d_value;", type, id);
             emitter().emit("*interface_%d_read = 0;", id);
             emitter().emit("*interface_%d_write = 0;", id);
             emitter().emit("");
+            emitter().emit("if(interface_%d_fp==NULL){", id);
+            emitter().increaseIndentation();
+            emitter().emit("printf(\"ERROR: unable to find input file %s.txt\\n\");", connection.getSource().getPort());
+            emitter().emit("input_files_available = false;");
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+            emitter().emit("");
         });
+
         resolver().getOutgoings().forEach(connection -> {
             int id = resolver().getConnectionId(connection);
             emitter().emit("// output interface %d", id);
@@ -455,21 +470,6 @@ public interface Host {
             emitter().emit("");
         });
 
-        // check if all input files are availables
-        emitter().emit("// check if all input files are availables");
-        emitter().emit("bool input_files_available = true;");
-        emitter().emit("");
-        resolver().getIncomings().forEach(connection -> {
-                    int id = resolver().getConnectionId(connection);
-                    emitter().emit("if(interface_%d_fp==NULL){", id);
-                    emitter().increaseIndentation();
-                    emitter().emit("printf(\"ERROR: unable to find input file %s.txt\\n\");", connection.getSource().getPort());
-                    emitter().emit("input_files_available = false;");
-                    emitter().decreaseIndentation();
-                    emitter().emit("}");
-                    emitter().emit("");
-                }
-        );
         emitter().emit("if(!input_files_available){");
         emitter().increaseIndentation();
         emitter().emit("test_error(CL_CONFIGURATION_ERROR, \"ERROR: Failed to load input files\", &cleanup);");
@@ -478,7 +478,7 @@ public interface Host {
         emitter().emit("");
 
         emitter().emit("// temporary variables");
-        emitter().emit("int tmp_read, tmp_write;");
+        emitter().emit("int tmp_read, tmp_write, rooms, count, parsedTokens;");
         emitter().emit("");
 
         emitter().emit("// schedule the interface");
@@ -498,30 +498,22 @@ public interface Host {
         // parse input files
         emitter().emit("// parse input files");
         resolver().getIncomings().forEach(connection -> {
+                    // get the id
                     int id = resolver().getConnectionId(connection);
-                    emitter().emit("if (interface_%d_readsize != -1) {", id);
-                    emitter().increaseIndentation();
-                    emitter().emit("int parsedTokens = 0;");
+                    // get the type
+                    PortDecl portDecl = connection.getTarget().getInstance().isPresent() ? resolver().getTargetPortDecl(connection) : resolver().getSourcePortDecl(connection);
+                    Type tokenType = backend().types().declaredPortType(portDecl);
+                    String type = backend().code().type(tokenType);
+
+                    emitter().emit("parsedTokens = 0;");
                     emitter().emit("tmp_read  = *interface_%d_read;", id);
                     emitter().emit("tmp_write = *interface_%d_write;", id);
-                    emitter().emit("int rooms = (FIFO_DEPTH + tmp_read - tmp_write - 1) %% FIFO_DEPTH;");
-                    emitter().emit("while (rooms && (interface_%d_readsize = getline(&interface_%d_line, &interface_%d_len, interface_%d_fp)) != -1) {", id, id, id, id);
+                    emitter().emit("rooms = (FIFO_DEPTH + tmp_read - tmp_write - 1) %% FIFO_DEPTH;");
+                    emitter().emit("while (rooms && read_%s_value(interface_%d_fp, &interface_%d_value)) {", type, id, id);
                     emitter().increaseIndentation();
-                    emitter().emit("int value = parse_int(interface_%d_line, &interface_%d_read_status);", id, id); // FIXME add parsing accordig to the port type....
-                    emitter().emit("");
-                    emitter().emit("if (interface_%d_read_status) {", id);
-                    emitter().increaseIndentation();
-                    emitter().emit("interface_%d_buffer[(tmp_write + parsedTokens) %% FIFO_DEPTH] = value;", id, id);
+                    emitter().emit("interface_%d_buffer[(tmp_write + parsedTokens) %% FIFO_DEPTH] = interface_%d_value;", id, id, id);
                     emitter().emit("parsedTokens++;");
                     emitter().emit("rooms--;");
-                    emitter().decreaseIndentation();
-                    emitter().emit("} else {");
-                    emitter().increaseIndentation();
-                    emitter().emit("interface_%d_readsize = -1;", id);
-                    emitter().emit("break;");
-                    emitter().decreaseIndentation();
-                    emitter().emit("}"); // end if read status
-                    emitter().emit("");
                     emitter().decreaseIndentation();
                     emitter().emit("}"); // end while rooms
                     emitter().emit("if (parsedTokens) {");
@@ -533,15 +525,12 @@ public interface Host {
                     emitter().emit("time_start = Clock::now();");
                     emitter().decreaseIndentation();
                     emitter().emit("}"); // end if parsed tokens and schedule = true
-                    emitter().decreaseIndentation();
-                    emitter().emit("}"); // end if read
                     emitter().emit("");
                 }
         );
 
         // collect output data
         emitter().emit("// collect output data");
-        emitter().emit("int count = 0;");
         resolver().getOutgoings().forEach(connection -> {
             int id = resolver().getConnectionId(connection);
             emitter().emit("status = clEnqueueTask(queues[QUEUE_INTERFACE_%d], kernel_interface_%d, 0, NULL, NULL);", id, id);
