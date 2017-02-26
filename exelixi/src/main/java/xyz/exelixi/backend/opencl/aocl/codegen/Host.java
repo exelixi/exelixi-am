@@ -53,7 +53,7 @@ import java.nio.file.Path;
 
 import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.usePipes;
 import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.profile;
-import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.intelOpt;
+import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.*;
 import static xyz.exelixi.utils.Utils.union;
 
 /**
@@ -105,8 +105,11 @@ public interface Host {
         emitter().emit("#include \"utils.h\"");
         emitter().emit("#include <stdio.h>");
         emitter().emit("#include <string.h>");
-        emitter().emit("#include <chrono>");
         emitter().emit("#include \"sharedconstants.h\"");
+        emitter().emit("");
+
+        // timeout
+        emitter().emit("#define TIMEOUT_SEC %f", configuration().get(timeOut).doubleValue());
         emitter().emit("");
 
         // the binary name
@@ -128,13 +131,6 @@ public interface Host {
             emitter().emit("#define QUEUE_INTERFACE_%d %d", id, queue);
             queue++;
         }
-        emitter().emit("");
-
-        // timing functions
-        emitter().emit("using Clock = std::chrono::high_resolution_clock;");
-        emitter().emit("using Ms = std::chrono::milliseconds;");
-        emitter().emit("template<class Duration>");
-        emitter().emit("using TimePoint = std::chrono::time_point<Clock, Duration>;");
         emitter().emit("");
 
         /* ================== HOST VARIABLES ==================*/
@@ -332,11 +328,10 @@ public interface Host {
         emitter().emit("");
 
         // print notice init ok
-        emitter().emit("printf(\"Kernels initialization is complete.\\n\");");
-        emitter().emit("printf(\"Launching the kernels...\\n\");");
+        emitter().emit("printf(\"Kernels initialization completed: launching the kernels.\\n\");");
 
         if (configuration().get(profile).booleanValue()) {
-            emitter().emit("printf(\"(execution profiling is enabled)\\n\");");
+            emitter().emit("printf(\"execution profiling: ENABLED\\n\");");
         }
 
         emitter().emit("");
@@ -435,7 +430,7 @@ public interface Host {
 
         // used to check if all input files are availables
         emitter().emit("// check if all input files are availables");
-        emitter().emit("bool input_files_available = true;");
+        emitter().emit("bool files_available = true;");
         emitter().emit("");
 
         // initialize the interfaces variables
@@ -449,6 +444,7 @@ public interface Host {
 
             emitter().emit("// input interface %d", id);
             emitter().emit("FILE *interface_%d_fp = fopen(\"%s.txt\", \"r\");", id, connection.getSource().getPort());
+            emitter().emit("long interface_%d_tx_tokens = 0;", id);
             emitter().emit("%s interface_%d_value;", type, id);
             emitter().emit("*interface_%d_read = 0;", id);
             emitter().emit("*interface_%d_write = 0;", id);
@@ -456,7 +452,7 @@ public interface Host {
             emitter().emit("if(interface_%d_fp==NULL){", id);
             emitter().increaseIndentation();
             emitter().emit("printf(\"ERROR: unable to find input file %s.txt\\n\");", connection.getSource().getPort());
-            emitter().emit("input_files_available = false;");
+            emitter().emit("files_available = false;");
             emitter().decreaseIndentation();
             emitter().emit("}");
             emitter().emit("");
@@ -465,14 +461,23 @@ public interface Host {
         resolver().getOutgoings().forEach(connection -> {
             int id = resolver().getConnectionId(connection);
             emitter().emit("// output interface %d", id);
+            emitter().emit("FILE *interface_%d_fp = fopen(\"%s.txt\", \"w\");", id, connection.getTarget().getPort());
+            emitter().emit("long interface_%d_rx_tokens = 0;", id);
             emitter().emit("*interface_%d_read = 0;", id);
             emitter().emit("*interface_%d_write = 0;", id);
             emitter().emit("");
+            emitter().emit("if(interface_%d_fp==NULL){", id);
+            emitter().increaseIndentation();
+            emitter().emit("printf(\"ERROR: unable to create output file %s.txt\\n\");", connection.getTarget().getPort());
+            emitter().emit("files_available = false;");
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+            emitter().emit("");
         });
 
-        emitter().emit("if(!input_files_available){");
+        emitter().emit("if(!files_available){");
         emitter().increaseIndentation();
-        emitter().emit("test_error(CL_CONFIGURATION_ERROR, \"ERROR: Failed to load input files\", &cleanup);");
+        emitter().emit("test_error(CL_CONFIGURATION_ERROR, \"ERROR: Failed to load/create input/output files\", &cleanup);");
         emitter().decreaseIndentation();
         emitter().emit("}");
         emitter().emit("");
@@ -481,8 +486,11 @@ public interface Host {
         emitter().emit("int tmp_read, tmp_write, rooms, count, parsedTokens;");
         emitter().emit("");
 
+        emitter().emit("printf(\"[host] Execution start\\n\");");
+        emitter().emit("");
+
         emitter().emit("// schedule the interface");
-        emitter().emit("Clock::time_point time_start = Clock::now(); // timeout timer");
+        emitter().emit("double time_start = get_current_timestamp(); // timeout timer");
         emitter().emit("do{");
         emitter().increaseIndentation();
 
@@ -522,7 +530,8 @@ public interface Host {
                     emitter().emit("cl_int status = clEnqueueTask(queues[QUEUE_INTERFACE_%d], kernel_interface_%d, 0, NULL, NULL);", id, id);
                     emitter().emit("test_error(status, \"ERROR: Failed to launch interface %d kernel.\\n\", &cleanup);", id);
                     emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", id);
-                    emitter().emit("time_start = Clock::now();");
+                    emitter().emit("interface_%d_tx_tokens += parsedTokens;", id);
+                    emitter().emit("time_start = get_current_timestamp();");
                     emitter().decreaseIndentation();
                     emitter().emit("}"); // end if parsed tokens and schedule = true
                     emitter().emit("");
@@ -532,26 +541,49 @@ public interface Host {
         // collect output data
         emitter().emit("// collect output data");
         resolver().getOutgoings().forEach(connection -> {
+            // get the id
             int id = resolver().getConnectionId(connection);
+            // get the type
+            PortDecl portDecl = connection.getTarget().getInstance().isPresent() ? resolver().getTargetPortDecl(connection) : resolver().getSourcePortDecl(connection);
+            Type tokenType = backend().types().declaredPortType(portDecl);
+            String type = backend().code().type(tokenType);
+
             emitter().emit("status = clEnqueueTask(queues[QUEUE_INTERFACE_%d], kernel_interface_%d, 0, NULL, NULL);", id, id);
             emitter().emit("test_error(status, \"ERROR: Failed to launch  interface %d.\\n\", &cleanup);", id);
             emitter().emit("status = clFinish(queues[QUEUE_INTERFACE_%d]);", id);
             emitter().emit("count = (FIFO_DEPTH + *interface_%d_write - *interface_%d_read) %% FIFO_DEPTH;", id, id);
             emitter().emit("if(count){");
             emitter().increaseIndentation();
-            emitter().emit("printf(\"[host] Interface %d received %%d tokens\\n\", count);", id);
+            emitter().emit("for(int i = 0; i < count; i++){");
+            emitter().increaseIndentation();
+            emitter().emit("write_%s_value(interface_%d_fp, interface_%d_buffer[(*interface_%d_read + i) %% FIFO_DEPTH]);", type, id, id, id);
+            emitter().decreaseIndentation();
+            emitter().emit("}");
+            emitter().emit("interface_%d_rx_tokens += count;", id);
             emitter().emit("*interface_%d_read = (*interface_%d_read + count) %% FIFO_DEPTH;", id, id);
-            emitter().emit("time_start = Clock::now();");
+            emitter().emit("time_start = get_current_timestamp();");
             emitter().decreaseIndentation();
             emitter().emit("}");
             emitter().emit("");
         });
 
         emitter().decreaseIndentation();
-        emitter().emit("}while(TimePoint<Ms>(std::chrono::duration_cast<Ms>(Clock::now() - time_start)) < TimePoint<Ms>(Ms(2000)));");
+        emitter().emit("}while((get_current_timestamp() - time_start) < TIMEOUT_SEC);");
         emitter().emit("");
 
-        emitter().emit("printf(\"[host] timeout reached... scheduling done\\n\");");
+        emitter().emit("printf(\"[host] Execution done\\n\");");
+
+        // print tokens counts
+        emitter().emit("// print tokens counts");
+        resolver().getIncomings().forEach(connection -> {
+            int id = resolver().getConnectionId(connection);
+            emitter().emit("printf(\"[interface %d] TX tokens: %%d\\n\", interface_%d_tx_tokens);", id, id);
+        });
+        resolver().getOutgoings().forEach(connection -> {
+            int id = resolver().getConnectionId(connection);
+            emitter().emit("printf(\"[interface %d] RX tokens: %%d\\n\", interface_%d_rx_tokens);", id, id);
+        });
+
 
         emitter().decreaseIndentation();
         emitter().emit("}");

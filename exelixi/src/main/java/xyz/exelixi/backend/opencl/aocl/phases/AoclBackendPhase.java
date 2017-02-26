@@ -44,6 +44,7 @@ import se.lth.cs.tycho.settings.OnOffSetting;
 import se.lth.cs.tycho.settings.Setting;
 import xyz.exelixi.Settings;
 import xyz.exelixi.backend.opencl.aocl.AoclBackendCore;
+import xyz.exelixi.utils.DecimalSetting;
 import xyz.exelixi.utils.Resolver;
 import xyz.exelixi.utils.Utils;
 
@@ -85,11 +86,21 @@ public class AoclBackendPhase implements Phase {
         @Override public Boolean defaultValue(Configuration configuration) { return true; }
     };
 
+    /**
+     * The maximal timeot in second reacheable on the host
+     */
+    public static final Setting<Double> timeOut = new DecimalSetting() {
+        @Override public String getKey() { return "aocl-timeout"; }
+        @Override public String getDescription() { return "The maximal timeot in second reacheable on the host"; }
+        @Override public Double defaultValue(Configuration configuration) { return 3.0; }
+    };
+
     private static List<Setting<?>> settings = new ArrayList<>();
     static {
         settings.add(usePipes);
         settings.add(profile);
         settings.add(intelOpt);
+        settings.add(timeOut);
     }
 
     /**

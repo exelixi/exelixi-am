@@ -51,4 +51,12 @@ int read_int_value(FILE* fp, int *value) {
 	}
 }
 
+/**
+ * Write an integer value to the file
+ * Each integer is write and a new line created
+ */
+int write_int_value(FILE* fp, int value){
+    return fprintf(fp, "%d\n", value);
+}
+
 #endif /* HOST_INCLUDE_UTILS_H_ */
