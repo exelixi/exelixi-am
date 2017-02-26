@@ -290,7 +290,6 @@ public interface Code {
 
     default String type(IntType type) {
         //FIXME support type size
-        // if (type.getSize().isPresent())
         return type.isSigned() ? "int" : "uint";
 
     }

@@ -51,8 +51,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
 
-import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.usePipes;
-import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.profile;
 import static xyz.exelixi.backend.opencl.aocl.phases.AoclBackendPhase.*;
 import static xyz.exelixi.utils.Utils.union;
 
@@ -109,7 +107,7 @@ public interface Host {
         emitter().emit("");
 
         // timeout
-        emitter().emit("#define TIMEOUT_SEC %f", configuration().get(timeOut).doubleValue());
+        emitter().emit("#define TIMEOUT_SEC %f", configuration().get(timeOut));
         emitter().emit("");
 
         // the binary name
@@ -517,7 +515,7 @@ public interface Host {
                     emitter().emit("tmp_read  = *interface_%d_read;", id);
                     emitter().emit("tmp_write = *interface_%d_write;", id);
                     emitter().emit("rooms = (FIFO_DEPTH + tmp_read - tmp_write - 1) %% FIFO_DEPTH;");
-                    emitter().emit("while (rooms && read_%s_value(interface_%d_fp, &interface_%d_value)) {", type, id, id);
+                    emitter().emit("while (rooms && read_%s(interface_%d_fp, &interface_%d_value)) {", type, id, id);
                     emitter().increaseIndentation();
                     emitter().emit("interface_%d_buffer[(tmp_write + parsedTokens) %% FIFO_DEPTH] = interface_%d_value;", id, id, id);
                     emitter().emit("parsedTokens++;");
@@ -556,7 +554,7 @@ public interface Host {
             emitter().increaseIndentation();
             emitter().emit("for(int i = 0; i < count; i++){");
             emitter().increaseIndentation();
-            emitter().emit("write_%s_value(interface_%d_fp, interface_%d_buffer[(*interface_%d_read + i) %% FIFO_DEPTH]);", type, id, id, id);
+            emitter().emit("write_%s(interface_%d_fp, interface_%d_buffer[(*interface_%d_read + i) %% FIFO_DEPTH]);", type, id, id, id);
             emitter().decreaseIndentation();
             emitter().emit("}");
             emitter().emit("interface_%d_rx_tokens += count;", id);

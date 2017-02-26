@@ -23,7 +23,7 @@ endif
 
 # Compilation flags
 ifeq ($(DEBUG),1)
-CXXFLAGS += -g
+CXXFLAGS += -g -DTHROWABLES
 else
 CXXFLAGS += -O2
 endif
