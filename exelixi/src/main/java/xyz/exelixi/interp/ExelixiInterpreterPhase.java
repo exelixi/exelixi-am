@@ -30,7 +30,7 @@ public class ExelixiInterpreterPhase implements Phase {
         int defaultChannelSize = 512;
         int defaultStackSize = 100;
 
-        ExelixiBasicNetworkSimulator networkSimulator = new ExelixiBasicNetworkSimulator(network, defaultChannelSize, defaultStackSize);
+        ExelixiBasicNetworkSimulator networkSimulator = new ExelixiBasicNetworkSimulator(task, network, defaultChannelSize, defaultStackSize);
 
 
         return null;
